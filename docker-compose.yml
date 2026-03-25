@@ -1,0 +1,23 @@
+services:
+
+  cpp-shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cpp-shell
+    restart: unless-stopped
+
+    # ── Ports ──────────────────────────────────────────────
+    # Frontend (serve): http://localhost:8080
+    # Backend (Express): exposed on 3001 for debugging only — not needed in prod
+    ports:
+      - "8080:8080"   # frontend
+      - "3001:3000"   # optional: direct API access for debugging
+
+    # ── Environment ────────────────────────────────────────
+    # BACKEND_URL is what the BROWSER (on the host) uses to reach the API.
+    # Port 3000 inside the container is mapped to 3001 on the host,
+    # so the browser must call localhost:3001, not localhost:3000.
+    environment:
+      - BACKEND_URL=http://localhost:3001/compile
+      - NODE_ENV=production
