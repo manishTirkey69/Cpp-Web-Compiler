@@ -1,0 +1,115 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Panel Label Bar ──────────────────────────────────── */
+.panelLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.filename {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text);
+  margin-left: 4px;
+}
+
+.hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+}
+
+/* ── CodeMirror pane ──────────────────────────────────── */
+.editorPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.cm {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Make the CM editor fill its container */
+.cm :global(.cm-editor) {
+  height: 100%;
+  font-size: 13.5px;
+  font-family: var(--font-mono);
+}
+
+.cm :global(.cm-scroller) {
+  overflow: auto;
+  font-family: var(--font-mono);
+  line-height: 1.65;
+}
+
+/* ── Stdin pane ───────────────────────────────────────── */
+.stdinPane {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  max-height: 130px;
+}
+
+.stdinTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.cinWarning {
+  font-size: 11px;
+  color: var(--yellow);
+  margin-left: 6px;
+  animation: fadein 0.25s ease;
+}
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+.stdinArea {
+  flex: 1;
+  resize: none;
+  background: var(--surface);
+  color: var(--text);
+  border: none;
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.stdinArea::placeholder  { color: var(--text-dim); }
+.stdinArea:focus         { border-color: var(--accent); }
+
+.stdinHighlight {
+  border-left: 2px solid var(--yellow);
+}

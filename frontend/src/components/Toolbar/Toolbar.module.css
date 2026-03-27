@@ -1,0 +1,116 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  height: 44px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Left controls ────────────────────────────────────── */
+.left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  user-select: none;
+}
+
+.select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.select:focus        { border-color: var(--accent); }
+.select:disabled     { opacity: 0.45; cursor: default; }
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.checkLabel input { accent-color: var(--accent); cursor: pointer; }
+.checkLabel input:disabled { cursor: default; }
+
+/* ── Right buttons ────────────────────────────────────── */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+}
+.btn:active:not(:disabled) { transform: scale(0.96); }
+
+.runBtn {
+  background: var(--accent);
+  color: #fff;
+  min-width: 90px;
+  justify-content: center;
+}
+.runBtn:hover:not(:disabled) { background: var(--accent-h); }
+.runBtn.busy  { opacity: 0.75; cursor: default; }
+.runBtn:disabled { cursor: default; }
+
+.killBtn {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 4px 14px;
+}
+.killBtn:hover { background: rgba(255, 85, 85, 0.12); }
+
+/* ── Spinner ──────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.55s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

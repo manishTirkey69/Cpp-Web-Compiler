@@ -1,24 +1,28 @@
 # ── Backend Dockerfile ───────────────────────────────────
-# Base: official Emscripten image (includes em++, Node.js, Python)
+# Base: official Emscripten image (includes em++, Node.js, Python, g++)
 FROM emscripten/emsdk:latest
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files first for layer-caching
+# Copy package files first for layer caching
 COPY package*.json ./
 
-# Install Node dependencies
-RUN npm install --omit=dev
+# Install ALL deps (including devDeps for tsc build)
+RUN npm install
 
-# Copy the rest of the backend source
-COPY . .
+# Copy source
+COPY tsconfig.json ./
+COPY src/ ./src/
 
-# Ensure the temp directory exists
+# Compile TypeScript → dist/
+RUN npm run build
+
+# Remove devDependencies after build to slim the image
+RUN npm prune --omit=dev
+
+# Ensure the temp directory exists for compilation artefacts
 RUN mkdir -p temp
 
-# Expose the Express port
-EXPOSE 3000
+EXPOSE 3001
 
-# Start the server
-CMD ["node", "server.js"]
+CMD ["node", "dist/server.js"]

@@ -1,0 +1,102 @@
+/* ── Layout Shell ─────────────────────────────────────── */
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+/* ── Header ───────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoIcon {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  letter-spacing: -0.05em;
+}
+
+.logoText {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.logoDivider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+.logoSub {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.nav a {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.nav a:hover {
+  color: var(--accent);
+}
+
+/* ── Main ─────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+.footer {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ── Responsive ───────────────────────────────────────── */
+@media (max-width: 600px) {
+  .logoSub { display: none; }
+  .nav { gap: 12px; }
+}

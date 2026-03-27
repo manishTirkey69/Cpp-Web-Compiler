@@ -1,0 +1,56 @@
+.workspaceWrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Editor column ────────────────────────────────────── */
+.editorCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Vertical divider between editor and terminal ─────── */
+.divider {
+  width: 4px;
+  background: var(--border);
+  flex-shrink: 0;
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+.divider:hover {
+  background: var(--accent);
+}
+
+/* ── Terminal column ──────────────────────────────────── */
+.terminalCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Responsive: stack vertically on small screens ─────── */
+@media (max-width: 760px) {
+  .workspace {
+    flex-direction: column;
+  }
+  .divider {
+    width: 100%;
+    height: 4px;
+    cursor: row-resize;
+  }
+}

@@ -1,126 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>C++ Shell — Online Compiler</title>
-
-  <!-- CodeMirror -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css"/>
-
-  <link rel="stylesheet" href="style.css"/>
-</head>
-<body>
-
-  <header>
-    <div class="logo">
-      <span class="logo-icon">&lt;/&gt;</span>
-      <span class="logo-text">C++ Shell</span>
-      <span class="logo-sub">Online Compiler · Powered by WebAssembly</span>
-    </div>
-    <div class="header-links">
-      <a href="https://emscripten.org" target="_blank">Emscripten</a>
-      <a href="https://webassembly.org" target="_blank">WebAssembly</a>
-    </div>
-  </header>
-
-  <main>
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <label>Standard:</label>
-        <select id="std-select">
-          <option value="c++14">C++14</option>
-          <option value="c++17" selected>C++17</option>
-          <option value="c++20">C++20</option>
-        </select>
-
-        <label>Optimize:</label>
-        <select id="opt-select">
-          <option value="O0">-O0 (none)</option>
-          <option value="O1">-O1</option>
-          <option value="O2" selected>-O2</option>
-          <option value="O3">-O3</option>
-        </select>
-
-        <label class="checkbox-label">
-          <input type="checkbox" id="wall-check" checked/>
-          -Wall
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="wextra-check"/>
-          -Wextra
-        </label>
-      </div>
-
-      <div class="toolbar-right">
-        <button id="clear-btn" class="btn btn-secondary">Clear</button>
-        <button id="run-btn" class="btn btn-primary">
-          <span id="run-label">▶ Run</span>
-          <span id="run-spinner" class="spinner hidden"></span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Editor + Output split -->
-    <div class="workspace">
-
-      <!-- Left: Editor + Stdin -->
-      <div class="left-panel">
-        <div class="panel-label">editor.cpp</div>
-        <textarea id="code-editor"></textarea>
-
-        <div class="stdin-section" id="stdin-section">
-          <div class="panel-label" id="stdin-label">
-            stdin
-            <span id="stdin-hint" class="stdin-hint hidden">⚠ your code reads from cin — type input here before running</span>
-          </div>
-          <textarea id="stdin-input" placeholder="Type program input here (one value per line)..."></textarea>
-        </div>
-      </div>
-
-      <!-- Right: Output -->
-      <div class="right-panel">
-        <div class="panel-label-row">
-          <div class="panel-label">output</div>
-          <div class="output-tabs">
-            <button class="tab-btn active" data-tab="console">Console</button>
-            <button class="tab-btn" data-tab="errors">Errors / Warnings</button>
-          </div>
-        </div>
-
-        <div id="tab-console" class="output-pane active">
-          <pre id="console-output"><span class="placeholder">Output will appear here after you click Run...</span></pre>
-        </div>
-        <div id="tab-errors" class="output-pane hidden">
-          <pre id="error-output"><span class="placeholder">No errors yet.</span></pre>
-        </div>
-
-        <div class="status-bar">
-          <span id="status-text">Ready</span>
-          <span id="compile-time"></span>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <footer>
-    <span>C++ Shell &copy; 2024 &mdash; Inspired by <a href="https://cpp.sh" target="_blank">cpp.sh</a></span>
-  </footer>
-
-  <!-- CodeMirror JS -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
-
-  <!-- Runtime config injected by docker-entrypoint.sh (sets window.__CPP_SHELL_BACKEND_URL__) -->
-  <!-- Falls back gracefully when opening index.html directly outside Docker -->
-  <script src="env-config.js" onerror="void 0"></script>
-
-  <script src="editor.js"></script>
-  <script src="runner.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>C++ Shell — Online Compiler</title>
+    <meta name="description" content="Online C++ compiler powered by WebAssembly and Emscripten" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

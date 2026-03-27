@@ -1,0 +1,50 @@
+/* ── CSS Variables ────────────────────────────────────── */
+:root {
+  --bg:          #1e1e2e;
+  --surface:     #252536;
+  --surface2:    #2d2d44;
+  --border:      #383856;
+  --accent:      #7c6af7;
+  --accent-h:    #6a57e8;
+  --green:       #50fa7b;
+  --red:         #ff5555;
+  --yellow:      #f1fa8c;
+  --cyan:        #8be9fd;
+  --text:        #cdd6f4;
+  --text-dim:    #6c7086;
+  --text-bright: #ffffff;
+  --font-mono:   'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-ui:     'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ── Reset ────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbars ───────────────────────────────────────── */
+::-webkit-scrollbar       { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ── Selection ────────────────────────────────────────── */
+::selection {
+  background: rgba(124, 106, 247, 0.35);
+  color: var(--text-bright);
+}
