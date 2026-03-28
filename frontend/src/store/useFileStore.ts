@@ -6,6 +6,15 @@ import type { FsNode, FsFile, FsFolder } from '@/types'
 let _id = 0
 const uid = () => `node_${++_id}`
 
+const SCRATCH_DEFAULT = `#include <iostream>
+
+int main() {
+    // ⚡ Scratch pad — write and run without saving a file
+    std::cout << "Hello from scratch!\\n";
+    return 0;
+}
+`
+
 const STARTER: FsFile = {
   kind:    'file',
   id:      'main',
@@ -100,14 +109,12 @@ function allFileIds(nodes: FsNode[]): string[] {
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 interface FileStore {
+  // ── Project file tree ─────────────────────────────────
   tree:         FsNode[]
   activeFileId: string | null
 
-  openFile:     (id: string) => void
-
-  /** Returns the currently open FsFile, or null */
+  openFile:      (id: string) => void
   activeFile:    () => FsFile | null
-  /** Alias kept for legacy callers */
   getActiveFile: () => FsFile | null
 
   createFile:   (parentId: string | null, name: string) => void
@@ -115,29 +122,38 @@ interface FileStore {
   renameNode:   (id: string, name: string) => void
   deleteNode:   (id: string) => void
   toggleFolder: (id: string) => void
-
-  /** Update file content — called by the Editor on every keystroke */
   updateContent:  (id: string, content: string) => void
-  /** Alias for updateContent */
   setFileContent: (id: string, content: string) => void
+
+  // ── Scratch pad ───────────────────────────────────────
+  /** true when the editor should show scratch code, not a project file */
+  scratchActive: boolean
+  scratchCode:   string
+  /** Activate scratch mode (deselects any open file) */
+  activateScratch: () => void
+  /** Update scratch content on keystroke */
+  setScratchCode: (code: string) => void
+  /** Clear scratch back to default template */
+  clearScratch: () => void
 }
 
 export const useFileStore = create<FileStore>((set, get) => ({
+  // ── Project file tree ─────────────────────────────────
   tree:         [STARTER],
   activeFileId: STARTER.id,
 
-  openFile: (id) => set({ activeFileId: id }),
+  openFile: (id) => set({ activeFileId: id, scratchActive: false }),
 
   activeFile: () => {
-    const { tree, activeFileId } = get()
-    if (!activeFileId) return null
+    const { tree, activeFileId, scratchActive } = get()
+    if (scratchActive || !activeFileId) return null
     const node = findNode(tree, activeFileId)
     return node?.kind === 'file' ? node : null
   },
 
   getActiveFile: () => {
-    const { tree, activeFileId } = get()
-    if (!activeFileId) return null
+    const { tree, activeFileId, scratchActive } = get()
+    if (scratchActive || !activeFileId) return null
     const node = findNode(tree, activeFileId)
     return node?.kind === 'file' ? node : null
   },
@@ -154,6 +170,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
         ? [...s.tree, newFile]
         : insertIn(s.tree, parentId, newFile),
       activeFileId: newFile.id,
+      scratchActive: false,
     }))
   },
 
@@ -194,4 +211,17 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   setFileContent: (id, content) =>
     set((s) => ({ tree: updateContentIn(s.tree, id, content) })),
+
+  // ── Scratch pad ───────────────────────────────────────
+  scratchActive: false,
+  scratchCode:   SCRATCH_DEFAULT,
+
+  activateScratch: () =>
+    set({ scratchActive: true, activeFileId: null }),
+
+  setScratchCode: (scratchCode) =>
+    set({ scratchCode }),
+
+  clearScratch: () =>
+    set({ scratchCode: SCRATCH_DEFAULT }),
 }))

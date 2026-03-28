@@ -54,7 +54,7 @@ function RenameInput({ initial, onCommit, onCancel }: RenameInputProps) {
   )
 }
 
-// ── New-item input (create file or folder) ────────────────────────────────────
+// ── New-item input ────────────────────────────────────────────────────────────
 interface NewItemInputProps {
   icon: string
   onCommit: (name: string) => void
@@ -144,7 +144,7 @@ function ContextMenu({
   )
 }
 
-// ── Tree node (recursive) ─────────────────────────────────────────────────────
+// ── Tree node ─────────────────────────────────────────────────────────────────
 interface TreeNodeProps {
   node: FsNode
   depth: number
@@ -156,6 +156,7 @@ interface TreeNodeProps {
 function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNodeProps) {
   const {
     activeFileId,
+    scratchActive,
     openFile,
     renameNode,
     deleteNode,
@@ -167,7 +168,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu]       = useState<{ x: number; y: number } | null>(null)
 
-  const isActive = node.kind === 'file' && node.id === activeFileId
+  const isActive = !scratchActive && node.kind === 'file' && node.id === activeFileId
   const indent   = { paddingLeft: `${12 + depth * 14}px` }
 
   const handleCtx = useCallback((e: React.MouseEvent) => {
@@ -187,9 +188,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
   }
 
   const pendingHere =
-    node.kind === 'folder' &&
-    !node.collapsed &&
-    pendingNew?.parentId === node.id
+    node.kind === 'folder' && !node.collapsed && pendingNew?.parentId === node.id
       ? pendingNew
       : null
 
@@ -203,17 +202,13 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
         title={node.name}
       >
         {node.kind === 'folder' ? (
-          <span className={styles.chevron}>
-            {node.collapsed ? '▶' : '▾'}
-          </span>
+          <span className={styles.chevron}>{node.collapsed ? '▶' : '▾'}</span>
         ) : (
           <span className={styles.fileIcon}>{fileIcon(node.name)}</span>
         )}
 
         {node.kind === 'folder' && (
-          <span className={styles.folderIcon}>
-            {node.collapsed ? '📁' : '📂'}
-          </span>
+          <span className={styles.folderIcon}>{node.collapsed ? '📁' : '📂'}</span>
         )}
 
         {renamingId === node.id ? (
@@ -239,7 +234,6 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
               onCancelNew={onCancelNew}
             />
           ))}
-
           {pendingHere && (
             <NewItemInput
               icon={pendingHere.kind === 'file' ? '📄' : '📁'}
@@ -278,6 +272,47 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
   )
 }
 
+// ── Scratch Pad section ───────────────────────────────────────────────────────
+function ScratchSection() {
+  const { scratchActive, scratchCode, activateScratch, clearScratch } = useFileStore()
+  const lineCount = scratchCode.split('\n').length
+
+  return (
+    <div className={`${styles.scratchSection} ${scratchActive ? styles.scratchSectionActive : ''}`}>
+
+      {/* Header row */}
+      <div
+        className={`${styles.scratchHeader} ${scratchActive ? styles.scratchHeaderActive : ''}`}
+        onClick={activateScratch}
+        title="Open scratch pad — no file needed"
+      >
+        <span className={styles.scratchIcon}>⚡</span>
+        <div className={styles.scratchTitles}>
+          <span className={styles.scratchTitle}>Scratch Pad</span>
+          <span className={styles.scratchSub}>no file needed</span>
+        </div>
+        {scratchActive && <span className={styles.scratchBadge}>active</span>}
+      </div>
+
+      {/* Expanded info when active */}
+      {scratchActive && (
+        <div className={styles.scratchMeta}>
+          <span className={styles.scratchMetaLine}>
+            {lineCount} line{lineCount !== 1 ? 's' : ''} · unsaved
+          </span>
+          <button
+            className={styles.scratchClearBtn}
+            onClick={(e) => { e.stopPropagation(); clearScratch() }}
+            title="Reset scratch to default template"
+          >
+            reset
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Root FileExplorer ─────────────────────────────────────────────────────────
 export function FileExplorer() {
   const { tree, createFile, createFolder } = useFileStore()
@@ -299,6 +334,8 @@ export function FileExplorer() {
 
   return (
     <aside className={styles.sidebar}>
+
+      {/* ── Top header ─────────────────────────────────── */}
       <div className={styles.header}>
         <span className={styles.title}>Explorer</span>
         <div className={styles.headerActions}>
@@ -315,6 +352,7 @@ export function FileExplorer() {
         </div>
       </div>
 
+      {/* ── Project file tree ───────────────────────────── */}
       <div className={styles.section}>
         <div
           className={styles.sectionHeader}
@@ -352,6 +390,10 @@ export function FileExplorer() {
         )}
       </div>
 
+      {/* ── Scratch Pad (pinned above footer) ──────────── */}
+      <ScratchSection />
+
+      {/* ── Footer ─────────────────────────────────────── */}
       <div className={styles.footer}>g++ · WebAssembly</div>
     </aside>
   )

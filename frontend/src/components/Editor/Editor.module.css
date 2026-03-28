@@ -14,6 +14,13 @@
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+/* Scratch mode: subtle yellow tint on the label bar */
+.panelLabelScratch {
+  background: rgba(241, 250, 140, 0.05);
+  border-bottom-color: rgba(241, 250, 140, 0.2);
 }
 
 .dot {
@@ -28,6 +35,29 @@
   font-family: var(--font-mono);
   color: var(--text);
   margin-left: 4px;
+}
+
+/* Scratch filename rendered in yellow */
+.filenameScratch {
+  color: var(--yellow);
+  margin-left: 0;
+}
+
+/* ⚡ icon in the label bar */
+.scratchIconSm {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* "scratch · unsaved" tag */
+.scratchTag {
+  font-size: 10px;
+  color: rgba(241, 250, 140, 0.6);
+  font-family: var(--font-mono);
+  background: rgba(241, 250, 140, 0.08);
+  border: 1px solid rgba(241, 250, 140, 0.15);
+  border-radius: 3px;
+  padding: 1px 6px;
 }
 
 .hint {
@@ -55,7 +85,6 @@
   min-height: 0;
 }
 
-/* Make the CM editor fill its container */
 .cm :global(.cm-editor) {
   height: 100%;
   font-size: 13.5px;

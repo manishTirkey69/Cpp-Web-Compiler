@@ -9,36 +9,57 @@ import styles from './Editor.module.css'
 export function Editor() {
   const { stdin, setStdin, usesCin, setUsesCin } = useEditorStore()
 
-  const activeFile      = useFileStore((s) => s.activeFile())
-  const setFileContent  = useFileStore((s) => s.setFileContent)
-  const activeFileId    = useFileStore((s) => s.activeFileId)
+  const scratchActive  = useFileStore((s) => s.scratchActive)
+  const scratchCode    = useFileStore((s) => s.scratchCode)
+  const setScratchCode = useFileStore((s) => s.setScratchCode)
+  const activeFile     = useFileStore((s) => s.activeFile())
+  const setFileContent = useFileStore((s) => s.setFileContent)
+  const activeFileId   = useFileStore((s) => s.activeFileId)
 
-  const code     = activeFile?.content ?? ''
-  const filename = activeFile?.name    ?? 'untitled'
+  // Determine what to show in the editor
+  const code     = scratchActive ? scratchCode : (activeFile?.content ?? '')
+  const filename = scratchActive ? 'scratch.cpp' : (activeFile?.name ?? 'untitled')
 
-  // Detect cin / getline usage any time the code changes
+  // Detect cin / getline usage whenever code changes
   useEffect(() => {
     setUsesCin(/\bcin\b|\bgetline\s*\(/.test(code))
   }, [code, setUsesCin])
 
   const handleChange = (value: string) => {
-    if (activeFileId) setFileContent(activeFileId, value)
+    if (scratchActive) {
+      setScratchCode(value)
+    } else if (activeFileId) {
+      setFileContent(activeFileId, value)
+    }
   }
 
   return (
     <div className={styles.wrapper}>
       {/* ── Code Editor ────────────────────────────────── */}
       <div className={styles.editorPane}>
-        <div className={styles.panelLabel}>
-          <span className={styles.dot} style={{ background: '#ff5f57' }} />
-          <span className={styles.dot} style={{ background: '#febc2e' }} />
-          <span className={styles.dot} style={{ background: '#28c840' }} />
-          <span className={styles.filename}>{filename}</span>
+        <div className={`${styles.panelLabel} ${scratchActive ? styles.panelLabelScratch : ''}`}>
+          {scratchActive ? (
+            // Scratch mode indicator
+            <>
+              <span className={styles.scratchIconSm}>⚡</span>
+              <span className={`${styles.filename} ${styles.filenameScratch}`}>{filename}</span>
+              <span className={styles.scratchTag}>scratch · unsaved</span>
+            </>
+          ) : (
+            // Normal file mode
+            <>
+              <span className={styles.dot} style={{ background: '#ff5f57' }} />
+              <span className={styles.dot} style={{ background: '#febc2e' }} />
+              <span className={styles.dot} style={{ background: '#28c840' }} />
+              <span className={styles.filename}>{filename}</span>
+            </>
+          )}
           <span className={styles.hint}>Ctrl+Enter to run</span>
         </div>
+
         <div className={styles.cm}>
           <CodeMirror
-            key={activeFileId ?? 'empty'}   // remount when switching files
+            key={scratchActive ? 'scratch' : (activeFileId ?? 'empty')}
             value={code}
             height="100%"
             theme={dracula}

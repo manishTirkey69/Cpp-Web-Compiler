@@ -3,7 +3,6 @@ import { useEditorStore } from '@/store/useEditorStore'
 import { useFileStore }   from '@/store/useFileStore'
 import type { CompileResult } from '@/types'
 
-// REST endpoint — proxied via Vite in dev, direct in prod/Docker
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 export function useCompiler() {
@@ -17,18 +16,26 @@ export function useCompiler() {
     setActiveTab,
   } = useEditorStore()
 
-  const activeFile = useFileStore((s) => s.activeFile())
+  const scratchActive = useFileStore((s) => s.scratchActive)
+  const scratchCode   = useFileStore((s) => s.scratchCode)
+  const activeFile    = useFileStore((s) => s.activeFile())
 
   const compile = useCallback(async (): Promise<string | null> => {
-    const code = activeFile?.content ?? ''
-    if (!code.trim()) return null
+    // Source: scratch buffer if scratch mode, otherwise the active file
+    const code = scratchActive ? scratchCode : (activeFile?.content ?? '')
+
+    if (!code.trim()) {
+      appendOutput({ type: 'info', text: 'Nothing to compile.' })
+      return null
+    }
 
     clearOutput()
     setPhase('compiling')
     setSessionId(null)
     setActiveTab('console')
 
-    appendOutput({ type: 'info', text: '⟳  Compiling…' })
+    const sourceLabel = scratchActive ? '⚡ scratch.cpp' : (activeFile?.name ?? 'file')
+    appendOutput({ type: 'info', text: `⟳  Compiling ${sourceLabel}…` })
 
     try {
       const res = await fetch(`${API_BASE}/api/compile`, {
@@ -37,9 +44,9 @@ export function useCompiler() {
         body: JSON.stringify({
           code,
           options: {
-            standard: options.standard,
+            standard:     options.standard,
             optimization: options.optimization,
-            warnings: options.warnings || options.wextra,
+            warnings:     options.warnings || options.wextra,
           },
         }),
       })
@@ -81,7 +88,11 @@ export function useCompiler() {
       setPhase('error')
       return null
     }
-  }, [activeFile, options, clearOutput, setPhase, setSessionId, setCompileOutput, appendOutput, setActiveTab])
+  }, [
+    scratchActive, scratchCode, activeFile,
+    options, clearOutput, setPhase, setSessionId,
+    setCompileOutput, appendOutput, setActiveTab,
+  ])
 
   return { compile }
 }
