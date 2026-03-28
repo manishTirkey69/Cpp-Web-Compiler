@@ -3,15 +3,14 @@ import type { FsNode, FsFile, FsFolder } from '@/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-let _id = 1
-const uid = () => String(_id++)
+let _id = 0
+const uid = () => `node_${++_id}`
 
-const STARTER: FsNode[] = [
-  {
-    kind: 'file',
-    id: uid(),
-    name: 'main.cpp',
-    content: `#include <iostream>
+const STARTER: FsFile = {
+  kind:    'file',
+  id:      'main',
+  name:    'main.cpp',
+  content: `#include <iostream>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -33,12 +32,10 @@ int main() {
     return 0;
 }
 `,
-  },
-]
+}
 
-// ── Tree utilities ────────────────────────────────────────────────────────────
+// ── Recursive tree helpers ────────────────────────────────────────────────────
 
-/** Walk the tree and return the node with the given id */
 function findNode(nodes: FsNode[], id: string): FsNode | null {
   for (const n of nodes) {
     if (n.id === id) return n
@@ -50,63 +47,52 @@ function findNode(nodes: FsNode[], id: string): FsNode | null {
   return null
 }
 
-/** Find the parent array that contains the node with the given id */
-function findParentList(nodes: FsNode[], id: string): FsNode[] | null {
-  for (const n of nodes) {
-    if (n.id === id) return nodes
-    if (n.kind === 'folder') {
-      const found = findParentList(n.children, id)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-/** Deep-clone the tree */
-function cloneTree(nodes: FsNode[]): FsNode[] {
-  return nodes.map((n) =>
-    n.kind === 'file'
-      ? { ...n }
-      : { ...n, children: cloneTree(n.children) }
-  )
-}
-
-/** Update a node in place (returns new tree) */
-function updateNode(nodes: FsNode[], id: string, updater: (n: FsNode) => FsNode): FsNode[] {
+function renameIn(nodes: FsNode[], id: string, name: string): FsNode[] {
   return nodes.map((n) => {
-    if (n.id === id) return updater(n)
-    if (n.kind === 'folder') return { ...n, children: updateNode(n.children, id, updater) }
+    if (n.id === id) return { ...n, name }
+    if (n.kind === 'folder') return { ...n, children: renameIn(n.children, id, name) }
     return n
   })
 }
 
-/** Remove a node by id (returns new tree) */
-function removeNode(nodes: FsNode[], id: string): FsNode[] {
+function deleteIn(nodes: FsNode[], id: string): FsNode[] {
   return nodes
     .filter((n) => n.id !== id)
     .map((n) =>
-      n.kind === 'folder' ? { ...n, children: removeNode(n.children, id) } : n
+      n.kind === 'folder' ? { ...n, children: deleteIn(n.children, id) } : n
     )
 }
 
-/** Insert a node into a folder (or root if folderId is null) */
-function insertNode(nodes: FsNode[], folderId: string | null, node: FsNode): FsNode[] {
-  if (folderId === null) return [...nodes, node]
+function toggleIn(nodes: FsNode[], id: string): FsNode[] {
   return nodes.map((n) => {
-    if (n.id === folderId && n.kind === 'folder')
-      return { ...n, children: [...n.children, node] }
-    if (n.kind === 'folder')
-      return { ...n, children: insertNode(n.children, folderId, node) }
+    if (n.id === id && n.kind === 'folder') return { ...n, collapsed: !n.collapsed }
+    if (n.kind === 'folder') return { ...n, children: toggleIn(n.children, id) }
     return n
   })
 }
 
-/** Collect all file ids under a folder (including nested) */
-function collectFileIds(nodes: FsNode[]): string[] {
+function insertIn(nodes: FsNode[], parentId: string, child: FsNode): FsNode[] {
+  return nodes.map((n) => {
+    if (n.id === parentId && n.kind === 'folder')
+      return { ...n, collapsed: false, children: [...n.children, child] }
+    if (n.kind === 'folder') return { ...n, children: insertIn(n.children, parentId, child) }
+    return n
+  })
+}
+
+function updateContentIn(nodes: FsNode[], id: string, content: string): FsNode[] {
+  return nodes.map((n) => {
+    if (n.kind === 'file' && n.id === id) return { ...n, content }
+    if (n.kind === 'folder') return { ...n, children: updateContentIn(n.children, id, content) }
+    return n
+  })
+}
+
+function allFileIds(nodes: FsNode[]): string[] {
   const ids: string[] = []
   for (const n of nodes) {
     if (n.kind === 'file') ids.push(n.id)
-    else ids.push(...collectFileIds(n.children))
+    else ids.push(...allFileIds(n.children))
   }
   return ids
 }
@@ -114,132 +100,98 @@ function collectFileIds(nodes: FsNode[]): string[] {
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 interface FileStore {
-  tree: FsNode[]
+  tree:         FsNode[]
   activeFileId: string | null
 
-  // ── Getters ────────────────────────────────────────────
-  activeFile: () => FsFile | null
+  openFile:     (id: string) => void
 
-  // ── File switching ──────────────────────────────────────
-  openFile: (id: string) => void
+  /** Returns the currently open FsFile, or null */
+  activeFile:    () => FsFile | null
+  /** Alias kept for legacy callers */
+  getActiveFile: () => FsFile | null
 
-  // ── Content edit (driven by CodeMirror) ────────────────
-  setFileContent: (id: string, content: string) => void
-
-  // ── CRUD ───────────────────────────────────────────────
-  createFile:   (parentFolderId: string | null, name: string) => string
-  createFolder: (parentFolderId: string | null, name: string) => string
-  renameNode:   (id: string, newName: string) => void
+  createFile:   (parentId: string | null, name: string) => void
+  createFolder: (parentId: string | null, name: string) => void
+  renameNode:   (id: string, name: string) => void
   deleteNode:   (id: string) => void
-
-  // ── Folder collapse ─────────────────────────────────────
   toggleFolder: (id: string) => void
+
+  /** Update file content — called by the Editor on every keystroke */
+  updateContent:  (id: string, content: string) => void
+  /** Alias for updateContent */
+  setFileContent: (id: string, content: string) => void
 }
 
-export const useFileStore = create<FileStore>((set, get) => {
-  const initialActiveId = (STARTER[0] as FsFile).id
+export const useFileStore = create<FileStore>((set, get) => ({
+  tree:         [STARTER],
+  activeFileId: STARTER.id,
 
-  return {
-    tree: cloneTree(STARTER),
-    activeFileId: initialActiveId,
+  openFile: (id) => set({ activeFileId: id }),
 
-    // ── Active file getter ──────────────────────────────
-    activeFile: () => {
-      const { tree, activeFileId } = get()
-      if (!activeFileId) return null
-      const node = findNode(tree, activeFileId)
-      return node?.kind === 'file' ? node : null
-    },
+  activeFile: () => {
+    const { tree, activeFileId } = get()
+    if (!activeFileId) return null
+    const node = findNode(tree, activeFileId)
+    return node?.kind === 'file' ? node : null
+  },
 
-    // ── Open a file ─────────────────────────────────────
-    openFile: (id) => {
-      const node = findNode(get().tree, id)
-      if (node?.kind === 'file') set({ activeFileId: id })
-    },
+  getActiveFile: () => {
+    const { tree, activeFileId } = get()
+    if (!activeFileId) return null
+    const node = findNode(tree, activeFileId)
+    return node?.kind === 'file' ? node : null
+  },
 
-    // ── Update file content ─────────────────────────────
-    setFileContent: (id, content) => {
-      set((s) => ({
-        tree: updateNode(s.tree, id, (n) =>
-          n.kind === 'file' ? { ...n, content } : n
-        ),
-      }))
-    },
-
-    // ── Create file ─────────────────────────────────────
-    createFile: (parentFolderId, name) => {
-      const id = uid()
-      const node: FsFile = { kind: 'file', id, name, content: '' }
-      set((s) => ({
-        tree: insertNode(s.tree, parentFolderId, node),
-        activeFileId: id,
-      }))
-      return id
-    },
-
-    // ── Create folder ────────────────────────────────────
-    createFolder: (parentFolderId, name) => {
-      const id = uid()
-      const node: FsFolder = { kind: 'folder', id, name, collapsed: false, children: [] }
-      set((s) => ({ tree: insertNode(s.tree, parentFolderId, node) }))
-      return id
-    },
-
-    // ── Rename ───────────────────────────────────────────
-    renameNode: (id, newName) => {
-      set((s) => ({
-        tree: updateNode(s.tree, id, (n) => ({ ...n, name: newName })),
-      }))
-    },
-
-    // ── Delete ───────────────────────────────────────────
-    deleteNode: (id) => {
-      const { tree, activeFileId } = get()
-
-      // Collect all file ids that will be removed
-      const node = findNode(tree, id)
-      const removedFileIds = node
-        ? node.kind === 'file'
-          ? [id]
-          : collectFileIds([node])
-        : []
-
-      const newTree = removeNode(tree, id)
-
-      // If active file was deleted, switch to first available file
-      let newActiveId = activeFileId
-      if (activeFileId && removedFileIds.includes(activeFileId)) {
-        const remaining = collectFileIds(newTree)
-        newActiveId = remaining[0] ?? null
-      }
-
-      set({ tree: newTree, activeFileId: newActiveId })
-    },
-
-    // ── Toggle folder collapse ───────────────────────────
-    toggleFolder: (id) => {
-      set((s) => ({
-        tree: updateNode(s.tree, id, (n) =>
-          n.kind === 'folder' ? { ...n, collapsed: !n.collapsed } : n
-        ),
-      }))
-    },
-  }
-})
-
-// ── Find parent folder id for a given node id ─────────────────────────────────
-export function getParentFolderId(tree: FsNode[], targetId: string): string | null {
-  function walk(nodes: FsNode[], parentId: string | null): string | null | undefined {
-    for (const n of nodes) {
-      if (n.id === targetId) return parentId
-      if (n.kind === 'folder') {
-        const result = walk(n.children, n.id)
-        if (result !== undefined) return result
-      }
+  createFile: (parentId, name) => {
+    const newFile: FsFile = {
+      kind:    'file',
+      id:      uid(),
+      name:    name.includes('.') ? name : `${name}.cpp`,
+      content: `#include <iostream>\n\nint main() {\n    return 0;\n}\n`,
     }
-    return undefined
-  }
-  return walk(tree, null) ?? null
-}
+    set((s) => ({
+      tree: parentId === null
+        ? [...s.tree, newFile]
+        : insertIn(s.tree, parentId, newFile),
+      activeFileId: newFile.id,
+    }))
+  },
 
-export { findNode, findParentList, cloneTree }
+  createFolder: (parentId, name) => {
+    const newFolder: FsFolder = {
+      kind:      'folder',
+      id:        uid(),
+      name,
+      collapsed: false,
+      children:  [],
+    }
+    set((s) => ({
+      tree: parentId === null
+        ? [...s.tree, newFolder]
+        : insertIn(s.tree, parentId, newFolder),
+    }))
+  },
+
+  renameNode: (id, name) =>
+    set((s) => ({ tree: renameIn(s.tree, id, name) })),
+
+  deleteNode: (id) =>
+    set((s) => {
+      const newTree   = deleteIn(s.tree, id)
+      const remaining = allFileIds(newTree)
+      const nextActive =
+        s.activeFileId === id || !remaining.includes(s.activeFileId ?? '')
+          ? (remaining[0] ?? null)
+          : s.activeFileId
+      return { tree: newTree, activeFileId: nextActive }
+    }),
+
+  toggleFolder: (id) =>
+    set((s) => ({ tree: toggleIn(s.tree, id) })),
+
+  updateContent: (id, content) =>
+    set((s) => ({ tree: updateContentIn(s.tree, id, content) })),
+
+  setFileContent: (id, content) =>
+    set((s) => ({ tree: updateContentIn(s.tree, id, content) })),
+}))

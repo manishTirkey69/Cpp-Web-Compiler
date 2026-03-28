@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useFileStore, getParentFolderId } from '@/store/useFileStore'
+import { useFileStore } from '@/store/useFileStore'
 import type { FsNode } from '@/types'
 import styles from './FileExplorer.module.css'
 
@@ -98,13 +98,16 @@ interface ContextMenuProps {
   y: number
   node: FsNode
   onClose: () => void
-  onRename:       () => void
-  onDelete:       () => void
-  onNewFile:      () => void
-  onNewFolder:    () => void
+  onRename:    () => void
+  onDelete:    () => void
+  onNewFile:   () => void
+  onNewFolder: () => void
 }
 
-function ContextMenu({ x, y, node, onClose, onRename, onDelete, onNewFile, onNewFolder }: ContextMenuProps) {
+function ContextMenu({
+  x, y, node, onClose,
+  onRename, onDelete, onNewFile, onNewFolder,
+}: ContextMenuProps) {
   const ref = useRef<HTMLUListElement>(null)
 
   useEffect(() => {
@@ -115,7 +118,6 @@ function ContextMenu({ x, y, node, onClose, onRename, onDelete, onNewFile, onNew
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  // Clamp to viewport
   const style: React.CSSProperties = {
     position: 'fixed',
     top:  Math.min(y, window.innerHeight - 160),
@@ -162,8 +164,8 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
     createFolder,
   } = useFileStore()
 
-  const [renamingId, setRenamingId]   = useState<string | null>(null)
-  const [ctxMenu, setCtxMenu]         = useState<{ x: number; y: number } | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [ctxMenu, setCtxMenu]       = useState<{ x: number; y: number } | null>(null)
 
   const isActive = node.kind === 'file' && node.id === activeFileId
   const indent   = { paddingLeft: `${12 + depth * 14}px` }
@@ -184,7 +186,6 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
     setRenamingId(null)
   }
 
-  // new-item pending inside THIS folder
   const pendingHere =
     node.kind === 'folder' &&
     !node.collapsed &&
@@ -194,7 +195,6 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
 
   return (
     <>
-      {/* ── Row ── */}
       <li
         className={`${styles.row} ${isActive ? styles.active : ''}`}
         style={indent}
@@ -227,7 +227,6 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
         )}
       </li>
 
-      {/* ── Folder children ── */}
       {node.kind === 'folder' && !node.collapsed && (
         <>
           {node.children.map((child) => (
@@ -241,13 +240,12 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
             />
           ))}
 
-          {/* ── Pending new-item input inside this folder ── */}
           {pendingHere && (
             <NewItemInput
               icon={pendingHere.kind === 'file' ? '📄' : '📁'}
               onCommit={(name) => {
-                if (pendingHere.kind === 'file')   createFile(node.id, name)
-                else                               createFolder(node.id, name)
+                if (pendingHere.kind === 'file') createFile(node.id, name)
+                else                             createFolder(node.id, name)
                 onNewCreated()
               }}
               onCancel={onCancelNew}
@@ -256,7 +254,6 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
         </>
       )}
 
-      {/* ── Context menu ── */}
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}
@@ -266,16 +263,13 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
           onRename={() => setRenamingId(node.id)}
           onDelete={() => deleteNode(node.id)}
           onNewFile={() => {
-            // If it's a folder, create inside; if file, create in same parent — handled by parent
-            // We signal this via the context menu triggering the parent's pendingNew
-            // so we dispatch a custom event the FileExplorer listens to
             window.dispatchEvent(new CustomEvent('fs:new', {
-              detail: { parentId: node.id, kind: 'file' }
+              detail: { parentId: node.id, kind: 'file' },
             }))
           }}
           onNewFolder={() => {
             window.dispatchEvent(new CustomEvent('fs:new', {
-              detail: { parentId: node.id, kind: 'folder' }
+              detail: { parentId: node.id, kind: 'folder' },
             }))
           }}
         />
@@ -285,17 +279,15 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
 }
 
 // ── Root FileExplorer ─────────────────────────────────────────────────────────
-
 export function FileExplorer() {
   const { tree, createFile, createFolder } = useFileStore()
 
   const [projectOpen, setProjectOpen] = useState(true)
-  const [pendingNew, setPendingNew] = useState<{
+  const [pendingNew, setPendingNew]   = useState<{
     parentId: string | null
     kind: 'file' | 'folder'
   } | null>(null)
 
-  // Listen for context-menu-triggered new events from tree nodes
   useEffect(() => {
     const handler = (e: Event) => {
       const { parentId, kind } = (e as CustomEvent).detail
@@ -307,7 +299,6 @@ export function FileExplorer() {
 
   return (
     <aside className={styles.sidebar}>
-      {/* ── Header ── */}
       <div className={styles.header}>
         <span className={styles.title}>Explorer</span>
         <div className={styles.headerActions}>
@@ -315,20 +306,15 @@ export function FileExplorer() {
             className={styles.iconBtn}
             title="New File"
             onClick={() => setPendingNew({ parentId: null, kind: 'file' })}
-          >
-            📄+
-          </button>
+          >📄+</button>
           <button
             className={styles.iconBtn}
             title="New Folder"
             onClick={() => setPendingNew({ parentId: null, kind: 'folder' })}
-          >
-            📁+
-          </button>
+          >📁+</button>
         </div>
       </div>
 
-      {/* ── Project section ── */}
       <div className={styles.section}>
         <div
           className={styles.sectionHeader}
@@ -351,13 +337,12 @@ export function FileExplorer() {
               />
             ))}
 
-            {/* ── Pending new item at root ── */}
             {pendingNew?.parentId === null && (
               <NewItemInput
                 icon={pendingNew.kind === 'file' ? '📄' : '📁'}
                 onCommit={(name) => {
-                  if (pendingNew.kind === 'file')   createFile(null, name)
-                  else                              createFolder(null, name)
+                  if (pendingNew.kind === 'file') createFile(null, name)
+                  else                            createFolder(null, name)
                   setPendingNew(null)
                 }}
                 onCancel={() => setPendingNew(null)}
