@@ -1,0 +1,60 @@
+{
+  "theme": "vs-dark",
+  "automaticLayout": true,
+  "detectIndentation": false,
+  "insertSpaces": true,
+  "fontFamily": "'Fira Code', 'Cascadia Code', Consolas, monospace",
+  "fontSize": 14,
+  "lineHeight": 22,
+  "tabSize": 2,
+  "lineNumbers": "on",
+  "wordWrap": "off",
+  "minimap": {
+    "enabled": true
+  },
+  "folding": true,
+  "glyphMargin": false,
+  "stickyScroll": {
+    "enabled": false
+  },
+  "quickSuggestions": true,
+  "suggestOnTriggerCharacters": true,
+  "acceptSuggestionOnEnter": "on",
+  "tabCompletion": "off",
+  "autoClosingBrackets": "languageDefined",
+  "autoClosingQuotes": "languageDefined",
+  "autoIndent": "advanced",
+  "cursorBlinking": "blink",
+  "cursorStyle": "line",
+  "cursorSmoothCaretAnimation": "off",
+  "renderWhitespace": "selection",
+  "renderControlCharacters": false,
+  "fontLigatures": false,
+  "bracketPairColorization": {
+    "enabled": true
+  },
+  "guides": {
+    "indentation": true,
+    "bracketPairs": true
+  },
+  "lineNumbersMinChars": 3,
+  "roundedSelection": true,
+  "selectionHighlight": true,
+  "scrollBeyondLastLine": false,
+  "smoothScrolling": true,
+  "mouseWheelZoom": true,
+  "formatOnPaste": false,
+  "formatOnType": false,
+  "linkedEditing": false,
+  "readOnly": false,
+  "padding": {
+    "top": 14,
+    "bottom": 14
+  },
+  "scrollbar": {
+    "alwaysConsumeMouseWheel": false
+  },
+  "unicodeHighlight": {
+    "ambiguousCharacters": false
+  }
+}
