@@ -1,9 +1,10 @@
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { buildMonacoOptions } from '@/lib/editorSettings'
+import { saveFileAs, saveToFileHandle } from '@/lib/saveFile'
 import { useEditorStore } from '@/store/useEditorStore'
 import { useFileStore }   from '@/store/useFileStore'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   RecentProject,
   RecentProjectsApiResponse,
@@ -60,6 +61,7 @@ export function Editor() {
   const newProject     = useFileStore((s) => s.newProject)
   const setUntitledTemplate = useFileStore((s) => s.setUntitledTemplate)
   const setScratchpadTemplate = useFileStore((s) => s.setScratchpadTemplate)
+  const bindFileHandle = useFileStore((s) => s.bindFileHandle)
   const pendingCursorPlacement = useFileStore((s) => s.pendingCursorPlacement)
   const consumePendingCursorPlacement = useFileStore((s) => s.consumePendingCursorPlacement)
   const activeFile     = useFileStore((s) => s.activeFile())
@@ -104,6 +106,24 @@ export function Editor() {
 
   const { options: monacoOptions } = buildMonacoOptions(editorSettings)
 
+  const handleSave = useCallback(async () => {
+    if (scratchActive || !activeFile) return
+
+    if (activeFile.savedHandle) {
+      try {
+        await saveToFileHandle(activeFile.savedHandle, activeFile.content)
+        return
+      } catch {
+        // Fall through to Save As if direct overwrite is no longer available.
+      }
+    }
+
+    const result = await saveFileAs(activeFile.name, activeFile.content)
+    if (result.status === 'saved' && result.fileHandle) {
+      bindFileHandle(activeFile.id, result.name, result.fileHandle)
+    }
+  }, [activeFile, bindFileHandle, scratchActive])
+
   useEffect(() => {
     const currentEditor = editorRef.current
     if (!currentEditor) return
@@ -130,6 +150,20 @@ export function Editor() {
     tabsEl.addEventListener('wheel', handleWheel, { passive: false })
     return () => tabsEl.removeEventListener('wheel', handleWheel)
   }, [scratchTabs.length, fileTabs.length])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
+      if (!scratchActive && !activeFile) return
+
+      event.preventDefault()
+      if (scratchActive) return
+      void handleSave()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeFile, handleSave, scratchActive])
 
   useEffect(() => {
     let cancelled = false

@@ -147,6 +147,16 @@ export interface ScratchpadTemplateApiResponse {
   template: UntitledFileTemplate
 }
 
+export interface SavedFileWritable {
+  write: (data: string) => Promise<void>
+  close: () => Promise<void>
+}
+
+export interface SavedFileHandle {
+  name: string
+  createWritable: () => Promise<SavedFileWritable>
+}
+
 // ── File System ──────────────────────────────────────────────────────────────
 
 export interface FsFile {
@@ -154,6 +164,7 @@ export interface FsFile {
   id: string
   name: string
   content: string
+  savedHandle: SavedFileHandle | null
 }
 
 export interface ScratchTab {

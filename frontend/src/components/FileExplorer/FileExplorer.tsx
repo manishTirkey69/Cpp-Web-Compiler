@@ -163,6 +163,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
     scratchActive,
     openFile,
     renameNode,
+    bindFileHandle,
     deleteNode,
     toggleFolder,
     createFile,
@@ -195,8 +196,12 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
   const handleSaveAs = useCallback(() => {
     if (node.kind !== 'file') return
     const fileNode = node as FsFile
-    void saveFileAs(fileNode.name, fileNode.content)
-  }, [node])
+    void saveFileAs(fileNode.name, fileNode.content).then((result) => {
+      if (result?.status === 'saved' && result.fileHandle) {
+        bindFileHandle(fileNode.id, result.name, result.fileHandle)
+      }
+    })
+  }, [bindFileHandle, node])
 
   const handleClick = () => {
     if (node.kind === 'file')   openFile(node.id)

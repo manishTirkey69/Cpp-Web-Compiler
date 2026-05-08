@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FsNode, FsFile, FsFolder, ScratchTab, UntitledFileTemplate } from '@/types'
+import type { FsNode, FsFile, FsFolder, SavedFileHandle, ScratchTab, UntitledFileTemplate } from '@/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,14 @@ function updateContentIn(nodes: FsNode[], id: string, content: string): FsNode[]
   return nodes.map((n) => {
     if (n.kind === 'file' && n.id === id) return { ...n, content }
     if (n.kind === 'folder') return { ...n, children: updateContentIn(n.children, id, content) }
+    return n
+  })
+}
+
+function updateFileIn(nodes: FsNode[], id: string, updater: (file: FsFile) => FsFile): FsNode[] {
+  return nodes.map((n) => {
+    if (n.kind === 'file' && n.id === id) return updater(n)
+    if (n.kind === 'folder') return { ...n, children: updateFileIn(n.children, id, updater) }
     return n
   })
 }
@@ -163,6 +171,7 @@ interface FileStore {
   createFile:   (parentId: string | null, name?: string) => void
   createFolder: (parentId: string | null, name: string) => void
   renameNode:   (id: string, name: string) => void
+  bindFileHandle: (id: string, name: string, savedHandle: SavedFileHandle | null) => void
   deleteNode:   (id: string) => void
   toggleFolder: (id: string) => void
   updateContent:  (id: string, content: string) => void
@@ -258,6 +267,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
         ? (name.includes('.') ? name : `${name}.cpp`)
         : nextUntitledFileName(get().tree),
       content: templateResult.content,
+      savedHandle: null,
     }
     set((s) => ({
       tree: parentId === null
@@ -292,6 +302,15 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   renameNode: (id, name) =>
     set((s) => ({ tree: renameIn(s.tree, id, name) })),
+
+  bindFileHandle: (id, name, savedHandle) =>
+    set((s) => ({
+      tree: updateFileIn(s.tree, id, (file) => ({
+        ...file,
+        name,
+        savedHandle,
+      })),
+    })),
 
   deleteNode: (id) =>
     set((s) => {

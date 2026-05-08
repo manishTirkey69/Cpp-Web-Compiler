@@ -1,3 +1,5 @@
+import type { SavedFileHandle } from '@/types'
+
 type SaveFilePickerWindow = Window & typeof globalThis & {
   showSaveFilePicker?: (options?: {
     suggestedName?: string
@@ -5,12 +7,13 @@ type SaveFilePickerWindow = Window & typeof globalThis & {
       description?: string
       accept: Record<string, string[]>
     }>
-  }) => Promise<{
-    createWritable: () => Promise<{
-      write: (data: string) => Promise<void>
-      close: () => Promise<void>
-    }>
-  }>
+  }) => Promise<SavedFileHandle>
+}
+
+export interface SaveFileAsResult {
+  status: 'saved' | 'downloaded' | 'cancelled'
+  name: string
+  fileHandle: SavedFileHandle | null
 }
 
 function downloadFile(name: string, content: string) {
@@ -45,13 +48,33 @@ export async function saveFileAs(name: string, content: string) {
       const writable = await handle.createWritable()
       await writable.write(content)
       await writable.close()
-      return
+      return {
+        status: 'saved',
+        name: handle.name,
+        fileHandle: handle,
+      } satisfies SaveFileAsResult
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      return
+      return {
+        status: 'cancelled',
+        name,
+        fileHandle: null,
+      } satisfies SaveFileAsResult
     }
   }
 
   downloadFile(name, content)
+
+  return {
+    status: 'downloaded',
+    name,
+    fileHandle: null,
+  } satisfies SaveFileAsResult
+}
+
+export async function saveToFileHandle(handle: SavedFileHandle, content: string) {
+  const writable = await handle.createWritable()
+  await writable.write(content)
+  await writable.close()
 }
