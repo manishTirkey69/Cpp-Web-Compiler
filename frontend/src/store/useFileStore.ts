@@ -12,26 +12,6 @@ function createScratchName() {
   return `scratch_${scratchCounter}.cpp`
 }
 
-function createScratchContent(name: string) {
-  return `#include <iostream>
-
-int main() {
-    // ⚡ ${name} — write and run without saving a project file
-    std::cout << "Hello from ${name}!\\n";
-    return 0;
-}
-`
-}
-
-function buildScratchTab(): ScratchTab {
-  const name = createScratchName()
-  return {
-    id: `scratch_${uid()}`,
-    name,
-    content: createScratchContent(name),
-  }
-}
-
 // ── Recursive tree helpers ────────────────────────────────────────────────────
 
 function findNode(nodes: FsNode[], id: string): FsNode | null {
@@ -114,7 +94,7 @@ function nextUntitledFileName(nodes: FsNode[]): string {
   return `untitled_${counter}.cpp`
 }
 
-function buildUntitledContent(template: UntitledFileTemplate | null) {
+function buildTemplateContent(template: UntitledFileTemplate | null) {
   if (!template) {
     return {
       content: '',
@@ -162,8 +142,10 @@ interface FileStore {
   activeFileId: string | null
   openFileIds:  string[]
   untitledTemplate: UntitledFileTemplate | null
+  scratchpadTemplate: UntitledFileTemplate | null
   pendingCursorPlacement: {
-    fileId: string
+    targetId: string
+    targetKind: 'file' | 'scratch'
     lineNumber: number
     column: number
   } | null
@@ -173,6 +155,7 @@ interface FileStore {
   openFirstFile: () => void
   newProject:    () => void
   setUntitledTemplate: (template: UntitledFileTemplate) => void
+  setScratchpadTemplate: (template: UntitledFileTemplate) => void
   consumePendingCursorPlacement: () => void
   activeFile:    () => FsFile | null
   getActiveFile: () => FsFile | null
@@ -201,6 +184,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
   activeFileId: null,
   openFileIds:  [],
   untitledTemplate: null,
+  scratchpadTemplate: null,
   pendingCursorPlacement: null,
 
   openFile: (id) =>
@@ -248,6 +232,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     })),
 
   setUntitledTemplate: (untitledTemplate) => set({ untitledTemplate }),
+  setScratchpadTemplate: (scratchpadTemplate) => set({ scratchpadTemplate }),
   consumePendingCursorPlacement: () => set({ pendingCursorPlacement: null }),
 
   activeFile: () => {
@@ -265,7 +250,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   createFile: (parentId, name) => {
-    const templateResult = buildUntitledContent(get().untitledTemplate)
+    const templateResult = buildTemplateContent(get().untitledTemplate)
     const newFile: FsFile = {
       kind:    'file',
       id:      uid(),
@@ -281,7 +266,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
       activeFileId: newFile.id,
       openFileIds: s.openFileIds.includes(newFile.id) ? s.openFileIds : [...s.openFileIds, newFile.id],
       pendingCursorPlacement: {
-        fileId: newFile.id,
+        targetId: newFile.id,
+        targetKind: 'file',
         lineNumber: templateResult.lineNumber,
         column: templateResult.column,
       },
@@ -341,11 +327,22 @@ export const useFileStore = create<FileStore>((set, get) => ({
         return { scratchActive: true, activeScratchId: id }
       }
 
-      const nextScratch = buildScratchTab()
+      const templateResult = buildTemplateContent(s.scratchpadTemplate)
+      const nextScratch: ScratchTab = {
+        id: `scratch_${uid()}`,
+        name: createScratchName(),
+        content: templateResult.content,
+      }
       return {
         scratchActive: true,
         activeScratchId: nextScratch.id,
         scratchTabs: [...s.scratchTabs, nextScratch],
+        pendingCursorPlacement: {
+          targetId: nextScratch.id,
+          targetKind: 'scratch',
+          lineNumber: templateResult.lineNumber,
+          column: templateResult.column,
+        },
       }
     }),
 
@@ -361,12 +358,20 @@ export const useFileStore = create<FileStore>((set, get) => ({
       const targetId = id ?? s.activeScratchId
       if (!targetId) return s
 
+      const templateResult = buildTemplateContent(s.scratchpadTemplate)
+
       return {
         scratchTabs: s.scratchTabs.map((tab) =>
           tab.id === targetId
-            ? { ...tab, content: createScratchContent(tab.name) }
+            ? { ...tab, content: templateResult.content }
             : tab
         ),
+        pendingCursorPlacement: {
+          targetId,
+          targetKind: 'scratch',
+          lineNumber: templateResult.lineNumber,
+          column: templateResult.column,
+        },
       }
     }),
 

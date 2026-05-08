@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useFileStore } from '@/store/useFileStore'
-import type { FsNode } from '@/types'
+import { saveFileAs } from '@/lib/saveFile'
+import type { FsFile, FsNode } from '@/types'
 import styles from './FileExplorer.module.css'
 
 // ── File icon by extension ────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ interface ContextMenuProps {
   y: number
   node: FsNode
   onClose: () => void
+  onSaveAs?:   () => void
   onRename:    () => void
   onDelete:    () => void
   onNewFile:   () => void
@@ -106,7 +108,7 @@ interface ContextMenuProps {
 
 function ContextMenu({
   x, y, node, onClose,
-  onRename, onDelete, onNewFile, onNewFolder,
+  onSaveAs, onRename, onDelete, onNewFile, onNewFolder,
 }: ContextMenuProps) {
   const ref = useRef<HTMLUListElement>(null)
 
@@ -138,6 +140,8 @@ function ContextMenu({
       {node.kind === 'folder' && item('📄  New File',   onNewFile)}
       {node.kind === 'folder' && item('📁  New Folder', onNewFolder)}
       {node.kind === 'folder' && <li className={styles.ctxDivider} />}
+      {node.kind === 'file' && onSaveAs && item('💾  Save As...', onSaveAs)}
+      {node.kind === 'file' && <li className={styles.ctxDivider} />}
       {item('✏️  Rename', onRename)}
       {item('🗑️  Delete', onDelete, true)}
     </ul>
@@ -177,6 +181,23 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
     setCtxMenu({ x: e.clientX, y: e.clientY })
   }, [])
 
+  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLLIElement>) => {
+    if (node.kind !== 'file') return
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setCtxMenu({
+      x: Math.min(rect.left + 24, window.innerWidth - 170),
+      y: Math.min(rect.bottom + 6, window.innerHeight - 160),
+    })
+  }, [node.kind])
+
+  const handleSaveAs = useCallback(() => {
+    if (node.kind !== 'file') return
+    const fileNode = node as FsFile
+    void saveFileAs(fileNode.name, fileNode.content)
+  }, [node])
+
   const handleClick = () => {
     if (node.kind === 'file')   openFile(node.id)
     if (node.kind === 'folder') toggleFolder(node.id)
@@ -198,6 +219,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
         className={`${styles.row} ${isActive ? styles.active : ''}`}
         style={indent}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onContextMenu={handleCtx}
         title={node.name}
       >
@@ -253,6 +275,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
           y={ctxMenu.y}
           node={node}
           onClose={() => setCtxMenu(null)}
+          onSaveAs={node.kind === 'file' ? handleSaveAs : undefined}
           onRename={() => setRenamingId(node.id)}
           onDelete={() => deleteNode(node.id)}
           onNewFile={() => createFile(node.id)}

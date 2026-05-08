@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   RecentProject,
   RecentProjectsApiResponse,
+  ScratchpadTemplateApiResponse,
   UntitledFileTemplateApiResponse,
 } from '@/types'
 import styles from './Editor.module.css'
@@ -58,6 +59,7 @@ export function Editor() {
   const openFirstFile  = useFileStore((s) => s.openFirstFile)
   const newProject     = useFileStore((s) => s.newProject)
   const setUntitledTemplate = useFileStore((s) => s.setUntitledTemplate)
+  const setScratchpadTemplate = useFileStore((s) => s.setScratchpadTemplate)
   const pendingCursorPlacement = useFileStore((s) => s.pendingCursorPlacement)
   const consumePendingCursorPlacement = useFileStore((s) => s.consumePendingCursorPlacement)
   const activeFile     = useFileStore((s) => s.activeFile())
@@ -132,29 +134,39 @@ export function Editor() {
   useEffect(() => {
     let cancelled = false
 
-    const loadUntitledTemplate = async () => {
+    const loadTemplates = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/templates/untitled-file`)
-        if (!res.ok) throw new Error(`Failed to load untitled template (${res.status})`)
+        const [untitledRes, scratchpadRes] = await Promise.all([
+          fetch(`${API_BASE}/api/templates/untitled-file`),
+          fetch(`${API_BASE}/api/templates/scratchpad`),
+        ])
 
-        const data = await res.json() as UntitledFileTemplateApiResponse
-        if (!cancelled && data.success) {
-          setUntitledTemplate(data.template)
+        if (!untitledRes.ok) throw new Error(`Failed to load untitled template (${untitledRes.status})`)
+        if (!scratchpadRes.ok) throw new Error(`Failed to load scratchpad template (${scratchpadRes.status})`)
+
+        const untitledData = await untitledRes.json() as UntitledFileTemplateApiResponse
+        const scratchpadData = await scratchpadRes.json() as ScratchpadTemplateApiResponse
+        if (!cancelled) {
+          if (untitledData.success) setUntitledTemplate(untitledData.template)
+          if (scratchpadData.success) setScratchpadTemplate(scratchpadData.template)
         }
       } catch {
-        // Leave the template empty if loading fails.
+        // Leave templates empty if loading fails.
       }
     }
 
-    loadUntitledTemplate()
+    loadTemplates()
 
     return () => { cancelled = true }
-  }, [setUntitledTemplate])
+  }, [setScratchpadTemplate, setUntitledTemplate])
 
   useEffect(() => {
     const currentEditor = editorRef.current
     if (!currentEditor || !pendingCursorPlacement) return
-    if (scratchActive || activeFileId !== pendingCursorPlacement.fileId) return
+    if (!scratchActive && pendingCursorPlacement.targetKind === 'file' && activeFileId !== pendingCursorPlacement.targetId) return
+    if (scratchActive && pendingCursorPlacement.targetKind === 'scratch' && activeScratchId !== pendingCursorPlacement.targetId) return
+    if (!scratchActive && pendingCursorPlacement.targetKind === 'scratch') return
+    if (scratchActive && pendingCursorPlacement.targetKind === 'file') return
 
     currentEditor.focus()
     currentEditor.setPosition({
@@ -168,6 +180,7 @@ export function Editor() {
     consumePendingCursorPlacement()
   }, [
     activeFileId,
+    activeScratchId,
     consumePendingCursorPlacement,
     pendingCursorPlacement,
     scratchActive,

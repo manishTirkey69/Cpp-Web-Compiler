@@ -141,6 +141,12 @@ export interface UntitledFileTemplateApiResponse {
   template: UntitledFileTemplate
 }
 
+export interface ScratchpadTemplateApiResponse {
+  success: boolean
+  path: string
+  template: UntitledFileTemplate
+}
+
 // ── File System ──────────────────────────────────────────────────────────────
 
 export interface FsFile {
