@@ -5,6 +5,8 @@ import http from 'http';
 import { URL } from 'url';
 import { compileRoute } from './routes/compile';
 import { editorSettingsRoute } from './routes/editorSettings';
+import { fileTemplatesRoute } from './routes/fileTemplates';
+import { recentProjectsRoute } from './routes/recentProjects';
 import { runSession } from './compiler';
 
 const app = express();
@@ -22,6 +24,8 @@ app.use(express.json({ limit: '2mb' }));
 // ── REST Routes ─────────────────────────────────────────────────────────────
 app.use('/api', compileRoute);
 app.use('/api', editorSettingsRoute);
+app.use('/api', fileTemplatesRoute);
+app.use('/api', recentProjectsRoute);
 
 app.get('/', (_req, res) => {
   res.json({ name: 'CppShell Backend', version: '1.0.0' });

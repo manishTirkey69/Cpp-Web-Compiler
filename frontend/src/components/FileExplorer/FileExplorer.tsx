@@ -148,7 +148,7 @@ function ContextMenu({
 interface TreeNodeProps {
   node: FsNode
   depth: number
-  pendingNew: { parentId: string | null; kind: 'file' | 'folder' } | null
+  pendingNew: { parentId: string | null; kind: 'folder' } | null
   onNewCreated: () => void
   onCancelNew:  () => void
 }
@@ -236,10 +236,9 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
           ))}
           {pendingHere && (
             <NewItemInput
-              icon={pendingHere.kind === 'file' ? '📄' : '📁'}
+              icon="📁"
               onCommit={(name) => {
-                if (pendingHere.kind === 'file') createFile(node.id, name)
-                else                             createFolder(node.id, name)
+                createFolder(node.id, name)
                 onNewCreated()
               }}
               onCancel={onCancelNew}
@@ -256,11 +255,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
           onClose={() => setCtxMenu(null)}
           onRename={() => setRenamingId(node.id)}
           onDelete={() => deleteNode(node.id)}
-          onNewFile={() => {
-            window.dispatchEvent(new CustomEvent('fs:new', {
-              detail: { parentId: node.id, kind: 'file' },
-            }))
-          }}
+          onNewFile={() => createFile(node.id)}
           onNewFolder={() => {
             window.dispatchEvent(new CustomEvent('fs:new', {
               detail: { parentId: node.id, kind: 'folder' },
@@ -323,16 +318,15 @@ function ScratchSection() {
 // ── Root FileExplorer ─────────────────────────────────────────────────────────
 export function FileExplorer() {
   const { tree, createFile, createFolder } = useFileStore()
-
-  const [projectOpen, setProjectOpen] = useState(true)
   const [pendingNew, setPendingNew]   = useState<{
     parentId: string | null
-    kind: 'file' | 'folder'
+    kind: 'folder'
   } | null>(null)
 
   useEffect(() => {
     const handler = (e: Event) => {
       const { parentId, kind } = (e as CustomEvent).detail
+      if (kind !== 'folder') return
       setPendingNew({ parentId, kind })
     }
     window.addEventListener('fs:new', handler)
@@ -344,12 +338,12 @@ export function FileExplorer() {
 
       {/* ── Top header ─────────────────────────────────── */}
       <div className={styles.header}>
-        <span className={styles.title}>Explorer</span>
+        <span className={styles.title}>Project</span>
         <div className={styles.headerActions}>
           <button
             className={styles.iconBtn}
             title="New File"
-            onClick={() => setPendingNew({ parentId: null, kind: 'file' })}
+            onClick={() => createFile(null)}
           >📄+</button>
           <button
             className={styles.iconBtn}
@@ -361,40 +355,29 @@ export function FileExplorer() {
 
       {/* ── Project file tree ───────────────────────────── */}
       <div className={styles.section}>
-        <div
-          className={styles.sectionHeader}
-          onClick={() => setProjectOpen((v) => !v)}
-        >
-          <span className={styles.chevron}>{projectOpen ? '▾' : '▶'}</span>
-          <span>PROJECT</span>
-        </div>
+        <ul className={styles.tree}>
+          {tree.map((node) => (
+            <TreeNode
+              key={node.id}
+              node={node}
+              depth={0}
+              pendingNew={pendingNew}
+              onNewCreated={() => setPendingNew(null)}
+              onCancelNew={() => setPendingNew(null)}
+            />
+          ))}
 
-        {projectOpen && (
-          <ul className={styles.tree}>
-            {tree.map((node) => (
-              <TreeNode
-                key={node.id}
-                node={node}
-                depth={0}
-                pendingNew={pendingNew}
-                onNewCreated={() => setPendingNew(null)}
-                onCancelNew={() => setPendingNew(null)}
-              />
-            ))}
-
-            {pendingNew?.parentId === null && (
-              <NewItemInput
-                icon={pendingNew.kind === 'file' ? '📄' : '📁'}
-                onCommit={(name) => {
-                  if (pendingNew.kind === 'file') createFile(null, name)
-                  else                            createFolder(null, name)
-                  setPendingNew(null)
-                }}
-                onCancel={() => setPendingNew(null)}
-              />
-            )}
-          </ul>
-        )}
+          {pendingNew?.parentId === null && (
+            <NewItemInput
+              icon="📁"
+              onCommit={(name) => {
+                createFolder(null, name)
+                setPendingNew(null)
+              }}
+              onCancel={() => setPendingNew(null)}
+            />
+          )}
+        </ul>
       </div>
 
       {/* ── Scratch Pad (pinned above footer) ──────────── */}

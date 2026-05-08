@@ -1,0 +1,12 @@
+{
+  "headerfile": ["iostream"],
+  "body": [
+    "using namespace std;",
+    "",
+    "int main()",
+    "{",
+    "\t<CURSOR>",
+    "\treturn 0;",
+    "}"
+  ]
+}

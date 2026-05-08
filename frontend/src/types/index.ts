@@ -118,6 +118,29 @@ export interface EditorSettingsApiResponse {
   error?: string
 }
 
+export interface RecentProject {
+  path: string
+  projectName: string
+  openedAt: string
+}
+
+export interface RecentProjectsApiResponse {
+  success: boolean
+  path: string
+  projects: RecentProject[]
+}
+
+export interface UntitledFileTemplate {
+  headerfile: string[]
+  body: string[]
+}
+
+export interface UntitledFileTemplateApiResponse {
+  success: boolean
+  path: string
+  template: UntitledFileTemplate
+}
+
 // ── File System ──────────────────────────────────────────────────────────────
 
 export interface FsFile {

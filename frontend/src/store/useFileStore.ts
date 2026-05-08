@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FsNode, FsFile, FsFolder, ScratchTab } from '@/types'
+import type { FsNode, FsFile, FsFolder, ScratchTab, UntitledFileTemplate } from '@/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,34 +30,6 @@ function buildScratchTab(): ScratchTab {
     name,
     content: createScratchContent(name),
   }
-}
-
-const STARTER: FsFile = {
-  kind:    'file',
-  id:      'main',
-  name:    'main.cpp',
-  content: `#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <string>
-
-int main() {
-    std::vector<int> nums = {5, 2, 8, 1, 9, 3};
-
-    std::sort(nums.begin(), nums.end());
-
-    std::cout << "Sorted: ";
-    for (int n : nums) std::cout << n << " ";
-    std::cout << "\\n";
-
-    std::cout << "Enter your name: ";
-    std::string name;
-    std::cin >> name;
-    std::cout << "Hello, " << name << "!\\n";
-
-    return 0;
-}
-`,
 }
 
 // ── Recursive tree helpers ────────────────────────────────────────────────────
@@ -123,18 +95,89 @@ function allFileIds(nodes: FsNode[]): string[] {
   return ids
 }
 
+function nextUntitledFileName(nodes: FsNode[]): string {
+  const names = new Set<string>()
+
+  const collect = (items: FsNode[]) => {
+    for (const item of items) {
+      names.add(item.name)
+      if (item.kind === 'folder') collect(item.children)
+    }
+  }
+
+  collect(nodes)
+
+  if (!names.has('untitled.cpp')) return 'untitled.cpp'
+
+  let counter = 2
+  while (names.has(`untitled_${counter}.cpp`)) counter += 1
+  return `untitled_${counter}.cpp`
+}
+
+function buildUntitledContent(template: UntitledFileTemplate | null) {
+  if (!template) {
+    return {
+      content: '',
+      lineNumber: 1,
+      column: 1,
+    }
+  }
+
+  const includeLines = template.headerfile.map((header) => `#include <${header}>`)
+  const bodyLines = [...template.body]
+  const contentLines = [...includeLines, ...bodyLines]
+
+  let lineNumber = 1
+  let column = 1
+
+  const normalizedContentLines = contentLines.map((line, index) => {
+    const cursorIndex = line.indexOf('<CURSOR>')
+    if (cursorIndex < 0) return line
+
+    lineNumber = index + 1
+    column = cursorIndex + 1
+    return line.replace('<CURSOR>', '')
+  })
+
+  if (normalizedContentLines.length === 0) {
+    return {
+      content: '',
+      lineNumber: 1,
+      column: 1,
+    }
+  }
+
+  return {
+    content: normalizedContentLines.join('\n'),
+    lineNumber,
+    column,
+  }
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 interface FileStore {
   // ── Project file tree ─────────────────────────────────
   tree:         FsNode[]
   activeFileId: string | null
+  openFileIds:  string[]
+  untitledTemplate: UntitledFileTemplate | null
+  pendingCursorPlacement: {
+    fileId: string
+    lineNumber: number
+    column: number
+  } | null
 
   openFile:      (id: string) => void
+  closeFileTab:  (id: string) => void
+  openFirstFile: () => void
+  newProject:    () => void
+  setUntitledTemplate: (template: UntitledFileTemplate) => void
+  consumePendingCursorPlacement: () => void
   activeFile:    () => FsFile | null
   getActiveFile: () => FsFile | null
 
-  createFile:   (parentId: string | null, name: string) => void
+  createFile:   (parentId: string | null, name?: string) => void
   createFolder: (parentId: string | null, name: string) => void
   renameNode:   (id: string, name: string) => void
   deleteNode:   (id: string) => void
@@ -154,10 +197,58 @@ interface FileStore {
 
 export const useFileStore = create<FileStore>((set, get) => ({
   // ── Project file tree ─────────────────────────────────
-  tree:         [STARTER],
-  activeFileId: STARTER.id,
+  tree:         [],
+  activeFileId: null,
+  openFileIds:  [],
+  untitledTemplate: null,
+  pendingCursorPlacement: null,
 
-  openFile: (id) => set({ activeFileId: id, scratchActive: false }),
+  openFile: (id) =>
+    set((s) => ({
+      activeFileId: id,
+      scratchActive: false,
+      openFileIds: s.openFileIds.includes(id) ? s.openFileIds : [...s.openFileIds, id],
+    })),
+
+  closeFileTab: (id) =>
+    set((s) => {
+      const nextOpenFileIds = s.openFileIds.filter((fileId) => fileId !== id)
+      if (s.activeFileId !== id) return { openFileIds: nextOpenFileIds }
+
+      const fallbackId = nextOpenFileIds[nextOpenFileIds.length - 1] ?? null
+      return {
+        openFileIds: nextOpenFileIds,
+        activeFileId: fallbackId,
+      }
+    }),
+
+  openFirstFile: () =>
+    set((s) => {
+      const firstFileId = allFileIds(s.tree)[0] ?? null
+      if (!firstFileId) return s
+
+      return {
+        activeFileId: firstFileId,
+        scratchActive: false,
+        openFileIds: s.openFileIds.includes(firstFileId)
+          ? s.openFileIds
+          : [...s.openFileIds, firstFileId],
+      }
+    }),
+
+  newProject: () =>
+    set(() => ({
+      tree: [],
+      activeFileId: null,
+      openFileIds: [],
+      pendingCursorPlacement: null,
+      scratchActive: false,
+      activeScratchId: null,
+      scratchTabs: [],
+    })),
+
+  setUntitledTemplate: (untitledTemplate) => set({ untitledTemplate }),
+  consumePendingCursorPlacement: () => set({ pendingCursorPlacement: null }),
 
   activeFile: () => {
     const { tree, activeFileId, scratchActive } = get()
@@ -174,17 +265,26 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   createFile: (parentId, name) => {
+    const templateResult = buildUntitledContent(get().untitledTemplate)
     const newFile: FsFile = {
       kind:    'file',
       id:      uid(),
-      name:    name.includes('.') ? name : `${name}.cpp`,
-      content: `#include <iostream>\n\nint main() {\n    return 0;\n}\n`,
+      name:    name?.trim()
+        ? (name.includes('.') ? name : `${name}.cpp`)
+        : nextUntitledFileName(get().tree),
+      content: templateResult.content,
     }
     set((s) => ({
       tree: parentId === null
         ? [...s.tree, newFile]
         : insertIn(s.tree, parentId, newFile),
       activeFileId: newFile.id,
+      openFileIds: s.openFileIds.includes(newFile.id) ? s.openFileIds : [...s.openFileIds, newFile.id],
+      pendingCursorPlacement: {
+        fileId: newFile.id,
+        lineNumber: templateResult.lineNumber,
+        column: templateResult.column,
+      },
       scratchActive: false,
     }))
   },
@@ -211,11 +311,12 @@ export const useFileStore = create<FileStore>((set, get) => ({
     set((s) => {
       const newTree   = deleteIn(s.tree, id)
       const remaining = allFileIds(newTree)
+      const nextOpenFileIds = s.openFileIds.filter((fileId) => remaining.includes(fileId))
       const nextActive =
         s.activeFileId === id || !remaining.includes(s.activeFileId ?? '')
-          ? (remaining[0] ?? null)
+          ? (nextOpenFileIds[nextOpenFileIds.length - 1] ?? remaining[0] ?? null)
           : s.activeFileId
-      return { tree: newTree, activeFileId: nextActive }
+      return { tree: newTree, activeFileId: nextActive, openFileIds: nextOpenFileIds }
     }),
 
   toggleFolder: (id) =>
