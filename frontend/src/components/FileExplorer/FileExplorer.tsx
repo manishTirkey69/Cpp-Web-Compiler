@@ -1,19 +1,31 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useFileStore } from '@/store/useFileStore'
 import { saveFileAs } from '@/lib/saveFile'
-import type { FsFile, FsNode } from '@/types'
+import type { FsFile, FsFolder, FsNode } from '@/types'
 import styles from './FileExplorer.module.css'
 
-// ── File icon by extension ────────────────────────────────────────────────────
-function fileIcon(name: string): string {
+// ── VS Code-like icon by extension ────────────────────────────────────────────
+function fileIconMeta(name: string) {
   const ext = name.split('.').pop()?.toLowerCase()
+
   switch (ext) {
-    case 'cpp': case 'cc': case 'cxx': return '⚙'
-    case 'h':   case 'hpp':            return '📋'
-    case 'c':                          return '📄'
-    case 'txt':                        return '📝'
-    case 'md':                         return '📖'
-    default:                           return '📄'
+    case 'cpp':
+    case 'cc':
+    case 'cxx':
+      return { label: 'C++', className: styles.fileIconCpp }
+    case 'h':
+    case 'hpp':
+      return { label: 'H', className: styles.fileIconHeader }
+    case 'c':
+      return { label: 'C', className: styles.fileIconC }
+    case 'json':
+      return { label: '{}', className: styles.fileIconJson }
+    case 'md':
+      return { label: 'MD', className: styles.fileIconMarkdown }
+    case 'txt':
+      return { label: 'TXT', className: styles.fileIconText }
+    default:
+      return { label: '•', className: styles.fileIconDefault }
   }
 }
 
@@ -57,12 +69,11 @@ function RenameInput({ initial, onCommit, onCancel }: RenameInputProps) {
 
 // ── New-item input ────────────────────────────────────────────────────────────
 interface NewItemInputProps {
-  icon: string
   onCommit: (name: string) => void
   onCancel: () => void
 }
 
-function NewItemInput({ icon, onCommit, onCancel }: NewItemInputProps) {
+function NewItemInput({ onCommit, onCancel }: NewItemInputProps) {
   const [value, setValue] = useState('')
   const ref = useRef<HTMLInputElement>(null)
 
@@ -76,7 +87,7 @@ function NewItemInput({ icon, onCommit, onCancel }: NewItemInputProps) {
 
   return (
     <li className={styles.newItem}>
-      <span className={styles.fileIcon}>{icon}</span>
+      <span className={`${styles.iconToken} ${styles.folderToken} ${styles.folderTokenClosed}`} aria-hidden="true" />
       <input
         ref={ref}
         className={styles.renameInput}
@@ -175,6 +186,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
 
   const isActive = !scratchActive && node.kind === 'file' && node.id === activeFileId
   const indent   = { paddingLeft: `${12 + depth * 14}px` }
+  const iconMeta = node.kind === 'file' ? fileIconMeta(node.name) : null
 
   const handleCtx = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -231,11 +243,16 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
         {node.kind === 'folder' ? (
           <span className={styles.chevron}>{node.collapsed ? '▶' : '▾'}</span>
         ) : (
-          <span className={styles.fileIcon}>{fileIcon(node.name)}</span>
+          <span className={`${styles.iconToken} ${styles.fileToken} ${iconMeta?.className ?? styles.fileIconDefault}`} aria-hidden="true">
+            {iconMeta?.label ?? '•'}
+          </span>
         )}
 
         {node.kind === 'folder' && (
-          <span className={styles.folderIcon}>{node.collapsed ? '📁' : '📂'}</span>
+          <span
+            className={`${styles.iconToken} ${styles.folderToken} ${node.collapsed ? styles.folderTokenClosed : styles.folderTokenOpen}`}
+            aria-hidden="true"
+          />
         )}
 
         {renamingId === node.id ? (
@@ -263,7 +280,6 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
           ))}
           {pendingHere && (
             <NewItemInput
-              icon="📁"
               onCommit={(name) => {
                 createFolder(node.id, name)
                 onNewCreated()
@@ -346,6 +362,14 @@ function ScratchSection() {
 // ── Root FileExplorer ─────────────────────────────────────────────────────────
 export function FileExplorer() {
   const { tree, createFile, createFolder } = useFileStore()
+  const projectRoot =
+    tree.length === 1 && tree[0]?.kind === 'folder'
+      ? tree[0] as FsFolder
+      : null
+  const hasOpenedProject = Boolean(projectRoot)
+  const headerTitle = projectRoot?.name ?? 'Project'
+  const visibleTree = projectRoot?.children ?? tree
+  const rootParentId = projectRoot?.id ?? null
   const [pendingNew, setPendingNew]   = useState<{
     parentId: string | null
     kind: 'folder'
@@ -366,25 +390,27 @@ export function FileExplorer() {
 
       {/* ── Top header ─────────────────────────────────── */}
       <div className={styles.header}>
-        <span className={styles.title}>Project</span>
+        <span className={styles.title} title={headerTitle}>{headerTitle}</span>
         <div className={styles.headerActions}>
           <button
             className={styles.iconBtn}
             title="New File"
-            onClick={() => createFile(null)}
+            onClick={() => createFile(rootParentId)}
           >📄+</button>
-          <button
-            className={styles.iconBtn}
-            title="New Folder"
-            onClick={() => setPendingNew({ parentId: null, kind: 'folder' })}
-          >📁+</button>
+          {hasOpenedProject && (
+            <button
+              className={styles.iconBtn}
+              title="New Folder"
+              onClick={() => setPendingNew({ parentId: rootParentId, kind: 'folder' })}
+            >📁+</button>
+          )}
         </div>
       </div>
 
       {/* ── Project file tree ───────────────────────────── */}
       <div className={styles.section}>
         <ul className={styles.tree}>
-          {tree.map((node) => (
+          {visibleTree.map((node) => (
             <TreeNode
               key={node.id}
               node={node}
@@ -395,11 +421,10 @@ export function FileExplorer() {
             />
           ))}
 
-          {pendingNew?.parentId === null && (
+          {pendingNew?.parentId === rootParentId && (
             <NewItemInput
-              icon="📁"
               onCommit={(name) => {
-                createFolder(null, name)
+                createFolder(rootParentId, name)
                 setPendingNew(null)
               }}
               onCancel={() => setPendingNew(null)}

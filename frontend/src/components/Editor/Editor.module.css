@@ -344,10 +344,14 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  width: 100%;
   padding: 14px 16px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
 }
 
 .recentItem:hover {
@@ -416,6 +420,114 @@
 
 .recentStateError {
   color: var(--red);
+}
+
+.projectBrowserBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.projectBrowserNavBtn {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.projectBrowserNavBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.projectBrowserPath {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectBrowserBody {
+  padding: 16px 18px;
+  min-height: 260px;
+  max-height: calc(min(76vh, 680px) - 180px);
+  overflow: auto;
+}
+
+.projectBrowserList {
+  display: grid;
+  gap: 10px;
+}
+
+.projectBrowserItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.projectBrowserItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 122, 204, 0.25);
+}
+
+.projectBrowserItemActive {
+  background: rgba(0, 122, 204, 0.14);
+  border-color: rgba(0, 122, 204, 0.4);
+}
+
+.projectBrowserItemIcon {
+  position: relative;
+  width: 18px;
+  height: 13px;
+  border-radius: 3px;
+  background: #d5a85f;
+  flex-shrink: 0;
+}
+
+.projectBrowserItemIcon::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: -3px;
+  width: 8px;
+  height: 4px;
+  border-radius: 2px 2px 0 0;
+  background: #e7c789;
+}
+
+.projectBrowserItemName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectBrowserFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* ── Stdin pane ───────────────────────────────────────── */

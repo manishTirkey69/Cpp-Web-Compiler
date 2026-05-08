@@ -130,6 +130,37 @@ export interface RecentProjectsApiResponse {
   projects: RecentProject[]
 }
 
+export interface RecentProjectsWriteApiResponse extends RecentProjectsApiResponse {
+  error?: string
+}
+
+export interface ProjectBrowserDirectory {
+  name: string
+  path: string
+}
+
+export interface ProjectBrowserApiResponse {
+  success: boolean
+  rootPath?: string
+  currentPath?: string
+  parentPath?: string | null
+  directories?: ProjectBrowserDirectory[]
+  error?: string
+}
+
+export interface ProjectTreeApiResponse {
+  success: boolean
+  projectName?: string
+  projectPath?: string
+  tree?: FsNode[]
+  error?: string
+}
+
+export interface ProjectFileWriteApiResponse {
+  success: boolean
+  error?: string
+}
+
 export interface UntitledFileTemplate {
   headerfile: string[]
   body: string[]
@@ -153,8 +184,26 @@ export interface SavedFileWritable {
 }
 
 export interface SavedFileHandle {
+  kind: 'file'
   name: string
+  getFile: () => Promise<{
+    text: () => Promise<string>
+  }>
   createWritable: () => Promise<SavedFileWritable>
+}
+
+export interface SavedDirectoryHandle {
+  kind: 'directory'
+  name: string
+  values: () => AsyncIterable<SavedEntryHandle>
+}
+
+export type SavedEntryHandle = SavedFileHandle | SavedDirectoryHandle
+
+export interface OpenProjectSelection {
+  tree: FsNode[]
+  projectName: string
+  projectPath: string
 }
 
 // ── File System ──────────────────────────────────────────────────────────────
@@ -165,6 +214,7 @@ export interface FsFile {
   name: string
   content: string
   savedHandle: SavedFileHandle | null
+  serverPath: string | null
 }
 
 export interface ScratchTab {
@@ -178,6 +228,8 @@ export interface FsFolder {
   id: string
   name: string
   collapsed: boolean
+  savedHandle: SavedDirectoryHandle | null
+  serverPath: string | null
   children: FsNode[]
 }
 

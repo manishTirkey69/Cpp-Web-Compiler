@@ -162,6 +162,7 @@ interface FileStore {
   closeFileTab:  (id: string) => void
   openFirstFile: () => void
   newProject:    () => void
+  loadProject:   (tree: FsNode[]) => void
   setUntitledTemplate: (template: UntitledFileTemplate) => void
   setScratchpadTemplate: (template: UntitledFileTemplate) => void
   consumePendingCursorPlacement: () => void
@@ -240,6 +241,21 @@ export const useFileStore = create<FileStore>((set, get) => ({
       scratchTabs: [],
     })),
 
+  loadProject: (tree) =>
+    set(() => {
+      const firstFileId = allFileIds(tree)[0] ?? null
+
+      return {
+        tree,
+        activeFileId: firstFileId,
+        openFileIds: firstFileId ? [firstFileId] : [],
+        pendingCursorPlacement: null,
+        scratchActive: false,
+        activeScratchId: null,
+        scratchTabs: [],
+      }
+    }),
+
   setUntitledTemplate: (untitledTemplate) => set({ untitledTemplate }),
   setScratchpadTemplate: (scratchpadTemplate) => set({ scratchpadTemplate }),
   consumePendingCursorPlacement: () => set({ pendingCursorPlacement: null }),
@@ -268,6 +284,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
         : nextUntitledFileName(get().tree),
       content: templateResult.content,
       savedHandle: null,
+      serverPath: null,
     }
     set((s) => ({
       tree: parentId === null
@@ -291,6 +308,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
       id:        uid(),
       name,
       collapsed: false,
+      savedHandle: null,
+      serverPath: null,
       children:  [],
     }
     set((s) => ({

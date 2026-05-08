@@ -1,11 +1,19 @@
 import MonacoEditor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { buildMonacoOptions } from '@/lib/editorSettings'
+import {
+  browseHostedDirectories,
+  pickProjectTree,
+  saveHostedProjectFile,
+} from '@/lib/openProject'
 import { saveFileAs, saveToFileHandle } from '@/lib/saveFile'
 import { useEditorStore } from '@/store/useEditorStore'
 import { useFileStore }   from '@/store/useFileStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  FsFile,
+  FsNode,
+  ProjectBrowserDirectory,
   RecentProject,
   RecentProjectsApiResponse,
   ScratchpadTemplateApiResponse,
@@ -47,6 +55,14 @@ export function Editor() {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [recentProjectsLoading, setRecentProjectsLoading] = useState(false)
   const [recentProjectsError, setRecentProjectsError] = useState<string | null>(null)
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false)
+  const [projectDialogPath, setProjectDialogPath] = useState<string | null>(null)
+  const [projectDialogRootPath, setProjectDialogRootPath] = useState<string | null>(null)
+  const [projectDialogParentPath, setProjectDialogParentPath] = useState<string | null>(null)
+  const [projectDialogDirectories, setProjectDialogDirectories] = useState<ProjectBrowserDirectory[]>([])
+  const [projectDialogSelectedPath, setProjectDialogSelectedPath] = useState<string | null>(null)
+  const [projectDialogLoading, setProjectDialogLoading] = useState(false)
+  const [projectDialogError, setProjectDialogError] = useState<string | null>(null)
 
   const scratchActive  = useFileStore((s) => s.scratchActive)
   const openFileIds    = useFileStore((s) => s.openFileIds)
@@ -57,8 +73,8 @@ export function Editor() {
   const closeScratchTab = useFileStore((s) => s.closeScratchTab)
   const openFile       = useFileStore((s) => s.openFile)
   const closeFileTab   = useFileStore((s) => s.closeFileTab)
-  const openFirstFile  = useFileStore((s) => s.openFirstFile)
-  const newProject     = useFileStore((s) => s.newProject)
+  const loadProject    = useFileStore((s) => s.loadProject)
+  const untitledTemplate = useFileStore((s) => s.untitledTemplate)
   const setUntitledTemplate = useFileStore((s) => s.setUntitledTemplate)
   const setScratchpadTemplate = useFileStore((s) => s.setScratchpadTemplate)
   const bindFileHandle = useFileStore((s) => s.bindFileHandle)
@@ -86,7 +102,6 @@ export function Editor() {
   // Determine what to show in the editor
   const code     = scratchActive ? (activeScratch?.content ?? '') : (activeFile?.content ?? '')
   const filename = scratchActive ? (activeScratch?.name ?? 'scratch.cpp') : (activeFile?.name ?? 'untitled')
-  const hasSelectableProjectFile = fileTabs.length > 0 || tree.length > 0
   const showEmptyProjectState = !scratchActive && !activeFile
 
   // Detect cin / getline usage whenever code changes
@@ -106,8 +121,54 @@ export function Editor() {
 
   const { options: monacoOptions } = buildMonacoOptions(editorSettings)
 
+  const buildTemplateDefaultContent = useCallback(() => {
+    if (!untitledTemplate) return ''
+    return [
+      ...untitledTemplate.headerfile.map((header) => `#include <${header}>`),
+      ...untitledTemplate.body,
+    ].join('\n').replace('<CURSOR>', '')
+  }, [untitledTemplate])
+
+  const collectUntitledFiles = useCallback((nodes: FsNode[]): FsFile[] => {
+    const untitledFiles: FsFile[] = []
+
+    for (const node of nodes) {
+      if (node.kind === 'folder') {
+        untitledFiles.push(...collectUntitledFiles(node.children))
+        continue
+      }
+
+      if (/^untitled(?:_\d+)?\.cpp$/i.test(node.name)) {
+        untitledFiles.push(node)
+      }
+    }
+
+    return untitledFiles
+  }, [])
+
+  const syncRecentProject = useCallback(async (projectName: string, projectPath: string) => {
+    try {
+      await fetch(`${API_BASE}/api/recent-projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: projectPath,
+          projectName,
+          openedAt: new Date().toISOString(),
+        }),
+      })
+    } catch {
+      // Ignore recent-project sync failures.
+    }
+  }, [])
+
   const handleSave = useCallback(async () => {
     if (scratchActive || !activeFile) return
+
+    if (activeFile.serverPath) {
+      await saveHostedProjectFile(activeFile.serverPath, activeFile.content)
+      return
+    }
 
     if (activeFile.savedHandle) {
       try {
@@ -123,6 +184,81 @@ export function Editor() {
       bindFileHandle(activeFile.id, result.name, result.fileHandle)
     }
   }, [activeFile, bindFileHandle, scratchActive])
+
+  const loadProjectDialogDirectory = useCallback(async (path?: string | null) => {
+    setProjectDialogLoading(true)
+    setProjectDialogError(null)
+
+    try {
+      const data = await browseHostedDirectories(path ?? undefined)
+      setProjectDialogOpen(true)
+      setProjectDialogRootPath(data.rootPath)
+      setProjectDialogPath(data.currentPath)
+      setProjectDialogParentPath(data.parentPath)
+      setProjectDialogDirectories(data.directories)
+      setProjectDialogSelectedPath(null)
+    } catch (error) {
+      setProjectDialogError(error instanceof Error ? error.message : 'Failed to browse directories.')
+      setProjectDialogOpen(true)
+    } finally {
+      setProjectDialogLoading(false)
+    }
+  }, [])
+
+  const prepareUntitledFilesForProjectSwitch = useCallback(async () => {
+    const untitledFiles = collectUntitledFiles(tree)
+    if (untitledFiles.length === 0) return true
+
+    const defaultContent = buildTemplateDefaultContent()
+    const changedUntitledFiles = untitledFiles.filter((file) => file.content !== defaultContent)
+
+    if (changedUntitledFiles.length === 0) return true
+
+    const shouldSave = window.confirm('Save all untitled files before opening the selected project?')
+    if (!shouldSave) return false
+
+    for (const file of changedUntitledFiles) {
+      const result = await saveFileAs(file.name, file.content)
+      if (result.status === 'cancelled') return false
+    }
+
+    return true
+  }, [buildTemplateDefaultContent, collectUntitledFiles, tree])
+
+  const handleSelectHostedProject = useCallback(async (selectedPath: string) => {
+    const canContinue = await prepareUntitledFilesForProjectSwitch()
+    if (!canContinue) return
+
+    const projectSelection = await pickProjectTree(selectedPath)
+
+    loadProject(projectSelection.tree)
+    setProjectDialogOpen(false)
+    await syncRecentProject(projectSelection.projectName, projectSelection.projectPath)
+  }, [loadProject, prepareUntitledFilesForProjectSwitch, syncRecentProject])
+
+  const handleOpenProject = useCallback(async () => {
+    await loadProjectDialogDirectory(projectDialogPath)
+  }, [loadProjectDialogDirectory, projectDialogPath])
+
+  const handleNewProject = useCallback(async () => {
+    await loadProjectDialogDirectory(projectDialogPath)
+  }, [loadProjectDialogDirectory, projectDialogPath])
+
+  const handleOpenRecentProject = useCallback(async (project: RecentProject) => {
+    setRecentProjectsError(null)
+
+    try {
+      const canContinue = await prepareUntitledFilesForProjectSwitch()
+      if (!canContinue) return
+
+      const projectSelection = await pickProjectTree(project.path)
+      loadProject(projectSelection.tree)
+      setRecentProjectsOpen(false)
+      await syncRecentProject(projectSelection.projectName, projectSelection.projectPath)
+    } catch (error) {
+      setRecentProjectsError(error instanceof Error ? error.message : 'Failed to open recent project.')
+    }
+  }, [loadProject, prepareUntitledFilesForProjectSwitch, syncRecentProject])
 
   useEffect(() => {
     const currentEditor = editorRef.current
@@ -341,13 +477,13 @@ export function Editor() {
             <div className={styles.emptyStateIcon}>⌘</div>
             <h2 className={styles.emptyStateTitle}>Project workspace</h2>
             <p className={styles.emptyStateText}>
-              No file is selected. Start a fresh project or reopen a file from the current project tree.
+              No file is selected. Start a fresh project, open a folder as a project, or review recent projects.
             </p>
             <div className={styles.emptyStateActions}>
               <button
                 type="button"
                 className={`${styles.emptyActionBtn} ${styles.emptyActionPrimary}`}
-                onClick={newProject}
+                onClick={() => { void handleNewProject() }}
               >
                 <span className={styles.emptyActionIcon}>✦</span>
                 <span>New Project</span>
@@ -355,8 +491,7 @@ export function Editor() {
               <button
                 type="button"
                 className={styles.emptyActionBtn}
-                onClick={openFirstFile}
-                disabled={!hasSelectableProjectFile}
+                onClick={() => { void handleOpenProject() }}
               >
                 <span className={styles.emptyActionIcon}>⤴</span>
                 <span>Open Project</span>
@@ -408,7 +543,12 @@ export function Editor() {
             {!recentProjectsLoading && !recentProjectsError && (
               <div className={styles.recentList}>
                 {recentProjects.map((project) => (
-                  <div key={`${project.path}_${project.openedAt}`} className={styles.recentItem}>
+                  <button
+                    key={`${project.path}_${project.openedAt}`}
+                    type="button"
+                    className={styles.recentItem}
+                    onClick={() => { void handleOpenRecentProject(project) }}
+                  >
                     <div className={styles.recentItemIcon}>📁</div>
                     <div className={styles.recentItemBody}>
                       <div className={styles.recentItemTop}>
@@ -420,7 +560,7 @@ export function Editor() {
                         {new Date(project.openedAt).toLocaleString()}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -446,6 +586,110 @@ export function Editor() {
             placeholder="Type program input here (one value per line)…"
             spellCheck={false}
           />
+        </div>
+      )}
+
+      {projectDialogOpen && (
+        <div
+          className={styles.recentOverlay}
+          onClick={() => setProjectDialogOpen(false)}
+        >
+          <div
+            className={styles.recentModal}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.recentHeader}>
+              <div>
+                <h3 className={styles.recentTitle}>Open Folder</h3>
+                <p className={styles.recentSubtitle}>
+                  Hosted system folders only. Files are hidden in this picker.
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.recentClose}
+                onClick={() => setProjectDialogOpen(false)}
+                aria-label="Close folder picker"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.projectBrowserBar}>
+              <button
+                type="button"
+                className={styles.projectBrowserNavBtn}
+                onClick={() => { void loadProjectDialogDirectory(projectDialogParentPath) }}
+                disabled={!projectDialogParentPath || projectDialogLoading}
+              >
+                Up
+              </button>
+              <button
+                type="button"
+                className={styles.projectBrowserNavBtn}
+                onClick={() => { void loadProjectDialogDirectory(projectDialogRootPath) }}
+                disabled={!projectDialogRootPath || projectDialogLoading}
+              >
+                Root
+              </button>
+              <div className={styles.projectBrowserPath} title={projectDialogPath ?? ''}>
+                {projectDialogPath ?? 'Select a hosted directory'}
+              </div>
+            </div>
+
+            <div className={styles.projectBrowserBody}>
+              {projectDialogLoading && (
+                <div className={styles.recentState}>Loading folders…</div>
+              )}
+
+              {!projectDialogLoading && projectDialogError && (
+                <div className={styles.recentStateError}>{projectDialogError}</div>
+              )}
+
+              {!projectDialogLoading && !projectDialogError && projectDialogDirectories.length === 0 && (
+                <div className={styles.recentState}>No subfolders here. You can open the current folder.</div>
+              )}
+
+              {!projectDialogLoading && !projectDialogError && projectDialogDirectories.length > 0 && (
+                <div className={styles.projectBrowserList}>
+                  {projectDialogDirectories.map((directory) => (
+                    <button
+                      key={directory.path}
+                      type="button"
+                      className={`${styles.projectBrowserItem} ${projectDialogSelectedPath === directory.path ? styles.projectBrowserItemActive : ''}`}
+                      onClick={() => setProjectDialogSelectedPath(directory.path)}
+                      onDoubleClick={() => { void loadProjectDialogDirectory(directory.path) }}
+                    >
+                      <span className={styles.projectBrowserItemIcon} aria-hidden="true" />
+                      <span className={styles.projectBrowserItemName}>{directory.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.projectBrowserFooter}>
+              <button
+                type="button"
+                className={styles.emptyActionBtn}
+                onClick={() => setProjectDialogOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`${styles.emptyActionBtn} ${styles.emptyActionPrimary}`}
+                onClick={() => {
+                  const targetPath = projectDialogSelectedPath ?? projectDialogPath
+                  if (!targetPath) return
+                  void handleSelectHostedProject(targetPath)
+                }}
+                disabled={projectDialogLoading || !projectDialogPath}
+              >
+                Open Selected Folder
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

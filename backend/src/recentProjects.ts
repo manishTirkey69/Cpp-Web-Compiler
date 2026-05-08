@@ -103,3 +103,39 @@ export function readRecentProjects(): Array<Record<string, unknown>> {
     return [...DEFAULT_RECENT_PROJECTS];
   }
 }
+
+export interface RecentProjectRecord {
+  path: string;
+  projectName: string;
+  openedAt: string;
+}
+
+function normalizeRecentProject(entry: Record<string, unknown>): RecentProjectRecord | null {
+  const pathValue = typeof entry.path === 'string' ? entry.path.trim() : '';
+  const projectName = typeof entry.projectName === 'string' ? entry.projectName.trim() : '';
+  const openedAt = typeof entry.openedAt === 'string' ? entry.openedAt.trim() : '';
+
+  if (!pathValue || !projectName || !openedAt) return null;
+
+  return {
+    path: pathValue,
+    projectName,
+    openedAt,
+  };
+}
+
+export function addRecentProject(project: RecentProjectRecord): RecentProjectRecord[] {
+  ensureRecentProjectsFile();
+
+  const existing = readRecentProjects()
+    .map((entry) => normalizeRecentProject(entry))
+    .filter((entry): entry is RecentProjectRecord => Boolean(entry));
+
+  const deduped = existing.filter(
+    (entry) => entry.path.toLowerCase() !== project.path.toLowerCase(),
+  );
+
+  const nextProjects = [project, ...deduped];
+  fs.writeFileSync(recentProjectsFile, JSON.stringify(nextProjects, null, 2) + '\n', 'utf-8');
+  return nextProjects;
+}

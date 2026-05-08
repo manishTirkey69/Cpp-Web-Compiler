@@ -6,6 +6,7 @@ import { URL } from 'url';
 import { compileRoute } from './routes/compile';
 import { editorSettingsRoute } from './routes/editorSettings';
 import { fileTemplatesRoute } from './routes/fileTemplates';
+import { projectBrowserRoute } from './routes/projectBrowser';
 import { recentProjectsRoute } from './routes/recentProjects';
 import { runSession } from './compiler';
 
@@ -25,6 +26,7 @@ app.use(express.json({ limit: '2mb' }));
 app.use('/api', compileRoute);
 app.use('/api', editorSettingsRoute);
 app.use('/api', fileTemplatesRoute);
+app.use('/api', projectBrowserRoute);
 app.use('/api', recentProjectsRoute);
 
 app.get('/', (_req, res) => {
