@@ -1,13 +1,20 @@
-import CodeMirror from '@uiw/react-codemirror'
-import { cpp } from '@codemirror/lang-cpp'
-import { dracula } from '@uiw/codemirror-theme-dracula'
+import MonacoEditor from '@monaco-editor/react'
+import type { editor } from 'monaco-editor'
+import { buildMonacoOptions } from '@/lib/editorSettings'
 import { useEditorStore } from '@/store/useEditorStore'
 import { useFileStore }   from '@/store/useFileStore'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import styles from './Editor.module.css'
 
 export function Editor() {
-  const { stdin, setStdin, usesCin, setUsesCin } = useEditorStore()
+  const {
+    stdin,
+    setStdin,
+    usesCin,
+    setUsesCin,
+    editorSettings,
+  } = useEditorStore()
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
 
   const scratchActive  = useFileStore((s) => s.scratchActive)
   const scratchCode    = useFileStore((s) => s.scratchCode)
@@ -25,13 +32,30 @@ export function Editor() {
     setUsesCin(/\bcin\b|\bgetline\s*\(/.test(code))
   }, [code, setUsesCin])
 
-  const handleChange = (value: string) => {
+  const handleChange = (value: string | undefined) => {
+    const nextValue = value ?? ''
+
     if (scratchActive) {
-      setScratchCode(value)
+      setScratchCode(nextValue)
     } else if (activeFileId) {
-      setFileContent(activeFileId, value)
+      setFileContent(activeFileId, nextValue)
     }
   }
+
+  const { options: monacoOptions } = buildMonacoOptions(editorSettings)
+
+  useEffect(() => {
+    const currentEditor = editorRef.current
+    if (!currentEditor) return
+
+    currentEditor.updateOptions(monacoOptions)
+    currentEditor.getModel()?.updateOptions({
+      tabSize: editorSettings.tabSize,
+      indentSize: editorSettings.tabSize,
+      insertSpaces: true,
+      trimAutoWhitespace: true,
+    })
+  }, [editorSettings, monacoOptions])
 
   return (
     <div className={styles.wrapper}>
@@ -58,22 +82,26 @@ export function Editor() {
         </div>
 
         <div className={styles.cm}>
-          <CodeMirror
+          <MonacoEditor
             key={scratchActive ? 'scratch' : (activeFileId ?? 'empty')}
             value={code}
             height="100%"
-            theme={dracula}
-            extensions={[cpp()]}
-            onChange={handleChange}
-            basicSetup={{
-              lineNumbers: true,
-              highlightActiveLineGutter: true,
-              foldGutter: true,
-              autocompletion: true,
-              bracketMatching: true,
-              closeBrackets: true,
-              indentOnInput: true,
+            defaultLanguage="cpp"
+            language="cpp"
+            path={filename}
+            theme={editorSettings.theme}
+            options={monacoOptions}
+            onMount={(editorInstance) => {
+              editorRef.current = editorInstance
+              editorInstance.getModel()?.updateOptions({
+                tabSize: editorSettings.tabSize,
+                indentSize: editorSettings.tabSize,
+                insertSpaces: true,
+                trimAutoWhitespace: true,
+              })
             }}
+            onChange={handleChange}
+            loading={<div className={styles.loadingState}>Loading Monaco editor…</div>}
           />
         </div>
       </div>

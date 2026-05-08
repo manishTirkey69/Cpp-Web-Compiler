@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import { URL } from 'url';
 import { compileRoute } from './routes/compile';
+import { editorSettingsRoute } from './routes/editorSettings';
 import { runSession } from './compiler';
 
 const app = express();
@@ -13,13 +14,14 @@ const PORT = parseInt(process.env.PORT ?? '3001', 10);
 app.use(
   cors({
     origin: ['http://localhost:5173', 'http://localhost:4173'],
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT'],
   })
 );
 app.use(express.json({ limit: '2mb' }));
 
 // ── REST Routes ─────────────────────────────────────────────────────────────
 app.use('/api', compileRoute);
+app.use('/api', editorSettingsRoute);
 
 app.get('/', (_req, res) => {
   res.json({ name: 'CppShell Backend', version: '1.0.0' });

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { CompileOptions, OutputLine, RunPhase } from '@/types'
+import type { CompileOptions, EditorSettings, OutputLine, RunPhase } from '@/types'
+import { defaultEditorSettings } from '@/lib/editorSettings'
 
 interface EditorStore {
   // ── Compile options ────────────────────────────────────
@@ -34,6 +35,14 @@ interface EditorStore {
   // ── cin detection ──────────────────────────────────────
   usesCin: boolean
   setUsesCin: (v: boolean) => void
+
+  // ── Editor settings ────────────────────────────────────
+  defaultEditorSettings: EditorSettings
+  editorSettings: EditorSettings
+  replaceDefaultEditorSettings: (settings: EditorSettings) => void
+  replaceEditorSettings: (settings: EditorSettings) => void
+  setEditorSetting: <K extends keyof EditorSettings>(key: K, value: EditorSettings[K]) => void
+  resetEditorSettings: () => void
 }
 
 let lineId = 0
@@ -83,4 +92,16 @@ export const useEditorStore = create<EditorStore>((set) => ({
   // ── cin ────────────────────────────────────────────────
   usesCin: false,
   setUsesCin: (usesCin) => set({ usesCin }),
+
+  // ── Editor settings ───────────────────────────────────
+  defaultEditorSettings: defaultEditorSettings,
+  editorSettings: defaultEditorSettings,
+  replaceDefaultEditorSettings: (defaultEditorSettings) => set({ defaultEditorSettings }),
+  replaceEditorSettings: (editorSettings) => set({ editorSettings }),
+  setEditorSetting: (key, value) =>
+    set((s) => {
+      return { editorSettings: { ...s.editorSettings, [key]: value } }
+    }),
+  resetEditorSettings: () =>
+    set((s) => ({ editorSettings: s.defaultEditorSettings })),
 }))

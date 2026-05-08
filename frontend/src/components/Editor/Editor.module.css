@@ -81,20 +81,23 @@
 
 .cm {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
+  background: #1e1e1e;
 }
 
-.cm :global(.cm-editor) {
+.cm :global(.monaco-editor),
+.cm :global(.monaco-editor .overflow-guard) {
+  height: 100% !important;
+}
+
+.loadingState {
   height: 100%;
-  font-size: 13.5px;
-  font-family: var(--font-mono);
-}
-
-.cm :global(.cm-scroller) {
-  overflow: auto;
-  font-family: var(--font-mono);
-  line-height: 1.65;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: var(--font-ui);
 }
 
 /* ── Stdin pane ───────────────────────────────────────── */

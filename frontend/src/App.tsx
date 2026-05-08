@@ -5,6 +5,7 @@ import { Editor }       from '@/components/Editor'
 import { Terminal }     from '@/components/Terminal'
 import { FileExplorer } from '@/components/FileExplorer'
 import { useCompiler }  from '@/hooks/useCompiler'
+import { useEditorSettingsSync } from '@/hooks/useEditorSettingsSync'
 import { useTerminal }  from '@/hooks/useTerminal'
 import { useEditorStore } from '@/store/useEditorStore'
 import styles from './App.module.css'
@@ -13,6 +14,8 @@ export default function App() {
   const { compile }          = useCompiler()
   const { connect, kill }    = useTerminal()
   const { clearOutput, phase } = useEditorStore()
+
+  useEditorSettingsSync()
 
   // ── Run: compile → then stream via WebSocket ────────
   const handleRun = useCallback(async () => {

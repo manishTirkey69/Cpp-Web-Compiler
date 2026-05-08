@@ -9,9 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@codemirror/lang-cpp": "^6.0.2",
-    "@uiw/codemirror-theme-dracula": "^4.23.0",
-    "@uiw/react-codemirror": "^4.23.0",
+    "@monaco-editor/react": "^4.7.0",
+    "monaco-editor": "^0.55.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.4"
