@@ -7,9 +7,22 @@ import styles from './Toolbar.module.css'
 interface ToolbarProps {
   onRun: () => void
   onKill: () => void
+  leftPaneVisible: boolean
+  rightPaneVisible: boolean
+  onToggleLeftPane: () => void
+  onToggleBothPanes: () => void
+  onToggleRightPane: () => void
 }
 
-export function Toolbar({ onRun, onKill }: ToolbarProps) {
+export function Toolbar({
+  onRun,
+  onKill,
+  leftPaneVisible,
+  rightPaneVisible,
+  onToggleLeftPane,
+  onToggleBothPanes,
+  onToggleRightPane,
+}: ToolbarProps) {
   const {
     options,
     setOption,
@@ -24,6 +37,7 @@ export function Toolbar({ onRun, onKill }: ToolbarProps) {
   const isRunning  = phase === 'compiling' || phase === 'running'
   const canKill    = phase === 'running'
   const { error: rawOptionsError } = parseRawMonacoOptions(editorSettings.rawOptions)
+  const bothPanesVisible = leftPaneVisible && rightPaneVisible
 
   useEffect(() => {
     if (!settingsOpen) return
@@ -133,6 +147,36 @@ export function Toolbar({ onRun, onKill }: ToolbarProps) {
           )}
           {!isRunning && '▶ Run'}
         </button>
+
+        <div className={styles.toggleGroup} aria-label="Pane visibility controls">
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${leftPaneVisible ? styles.toggleBtnActive : ''}`}
+            onClick={onToggleLeftPane}
+            aria-pressed={leftPaneVisible}
+            title="Toggle file tree"
+          >
+            <span className={styles.toggleIcon} aria-hidden="true">▕▣</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${bothPanesVisible ? styles.toggleBtnActive : ''}`}
+            onClick={onToggleBothPanes}
+            aria-pressed={bothPanesVisible}
+            title="Toggle both side panes"
+          >
+            <span className={styles.toggleIcon} aria-hidden="true">▕▣▏</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${rightPaneVisible ? styles.toggleBtnActive : ''}`}
+            onClick={onToggleRightPane}
+            aria-pressed={rightPaneVisible}
+            title="Toggle console"
+          >
+            <span className={styles.toggleIcon} aria-hidden="true">▣▏</span>
+          </button>
+        </div>
 
         <div className={styles.settingsWrap} ref={settingsRef}>
           <button

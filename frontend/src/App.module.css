@@ -13,13 +13,21 @@
   min-height: 0;
 }
 
+.sidebarCol {
+  flex-shrink: 0;
+  min-width: 180px;
+  max-width: 40%;
+  overflow: hidden;
+  display: flex;
+}
+
 /* ── Editor column ────────────────────────────────────── */
 .editorCol {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 0;
+  min-width: 360px;
 }
 
 /* ── Vertical divider between editor and terminal ─────── */
@@ -29,6 +37,7 @@
   flex-shrink: 0;
   cursor: col-resize;
   transition: background 0.15s;
+  touch-action: none;
 }
 .divider:hover {
   background: var(--accent);
@@ -36,17 +45,24 @@
 
 /* ── Terminal column ──────────────────────────────────── */
 .terminalCol {
-  flex: 1;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 0;
+  min-width: 320px;
 }
 
 /* ── Responsive: stack vertically on small screens ─────── */
 @media (max-width: 760px) {
   .workspace {
     flex-direction: column;
+  }
+  .sidebarCol,
+  .terminalCol,
+  .editorCol {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none;
   }
   .divider {
     width: 100%;
