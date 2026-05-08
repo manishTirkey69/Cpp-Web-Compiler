@@ -127,6 +127,12 @@ export interface FsFile {
   content: string
 }
 
+export interface ScratchTab {
+  id: string
+  name: string
+  content: string
+}
+
 export interface FsFolder {
   kind: 'folder'
   id: string

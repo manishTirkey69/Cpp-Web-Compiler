@@ -70,6 +70,86 @@
   padding: 1px 7px;
 }
 
+.tabsBar {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  padding: 0 8px;
+  background: rgba(0, 0, 0, 0.14);
+  border-bottom: 1px solid var(--border);
+  overflow-x: scroll;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) rgba(255, 255, 255, 0.04);
+}
+
+.tabsBar::-webkit-scrollbar {
+  height: 10px;
+}
+
+.tabsBar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tabsBar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.tabsBar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+.editorTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 220px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-top: 2px solid transparent;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.editorTab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.editorTabActive {
+  color: var(--yellow);
+  background: rgba(241, 250, 140, 0.05);
+  border-top-color: rgba(241, 250, 140, 0.7);
+}
+
+.editorTabName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editorTabClose {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.editorTabClose:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* ── CodeMirror pane ──────────────────────────────────── */
 .editorPane {
   flex: 1;

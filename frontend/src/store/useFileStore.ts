@@ -1,19 +1,36 @@
 import { create } from 'zustand'
-import type { FsNode, FsFile, FsFolder } from '@/types'
+import type { FsNode, FsFile, FsFolder, ScratchTab } from '@/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 let _id = 0
 const uid = () => `node_${++_id}`
+let scratchCounter = 0
 
-const SCRATCH_DEFAULT = `#include <iostream>
+function createScratchName() {
+  scratchCounter += 1
+  return `scratch_${scratchCounter}.cpp`
+}
+
+function createScratchContent(name: string) {
+  return `#include <iostream>
 
 int main() {
-    // ⚡ Scratch pad — write and run without saving a file
-    std::cout << "Hello from scratch!\\n";
+    // ⚡ ${name} — write and run without saving a project file
+    std::cout << "Hello from ${name}!\\n";
     return 0;
 }
 `
+}
+
+function buildScratchTab(): ScratchTab {
+  const name = createScratchName()
+  return {
+    id: `scratch_${uid()}`,
+    name,
+    content: createScratchContent(name),
+  }
+}
 
 const STARTER: FsFile = {
   kind:    'file',
@@ -126,15 +143,13 @@ interface FileStore {
   setFileContent: (id: string, content: string) => void
 
   // ── Scratch pad ───────────────────────────────────────
-  /** true when the editor should show scratch code, not a project file */
   scratchActive: boolean
-  scratchCode:   string
-  /** Activate scratch mode (deselects any open file) */
-  activateScratch: () => void
-  /** Update scratch content on keystroke */
+  activeScratchId: string | null
+  scratchTabs: ScratchTab[]
+  activateScratch: (id?: string) => void
   setScratchCode: (code: string) => void
-  /** Clear scratch back to default template */
-  clearScratch: () => void
+  clearScratch: (id?: string) => void
+  closeScratchTab: (id: string) => void
 }
 
 export const useFileStore = create<FileStore>((set, get) => ({
@@ -214,14 +229,59 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   // ── Scratch pad ───────────────────────────────────────
   scratchActive: false,
-  scratchCode:   SCRATCH_DEFAULT,
+  activeScratchId: null,
+  scratchTabs: [],
 
-  activateScratch: () =>
-    set({ scratchActive: true, activeFileId: null }),
+  activateScratch: (id) =>
+    set((s) => {
+      if (id) {
+        const target = s.scratchTabs.find((tab) => tab.id === id)
+        if (!target) return s
+        return { scratchActive: true, activeScratchId: id }
+      }
 
-  setScratchCode: (scratchCode) =>
-    set({ scratchCode }),
+      const nextScratch = buildScratchTab()
+      return {
+        scratchActive: true,
+        activeScratchId: nextScratch.id,
+        scratchTabs: [...s.scratchTabs, nextScratch],
+      }
+    }),
 
-  clearScratch: () =>
-    set({ scratchCode: SCRATCH_DEFAULT }),
+  setScratchCode: (content) =>
+    set((s) => ({
+      scratchTabs: s.scratchTabs.map((tab) =>
+        tab.id === s.activeScratchId ? { ...tab, content } : tab
+      ),
+    })),
+
+  clearScratch: (id) =>
+    set((s) => {
+      const targetId = id ?? s.activeScratchId
+      if (!targetId) return s
+
+      return {
+        scratchTabs: s.scratchTabs.map((tab) =>
+          tab.id === targetId
+            ? { ...tab, content: createScratchContent(tab.name) }
+            : tab
+        ),
+      }
+    }),
+
+  closeScratchTab: (id) =>
+    set((s) => {
+      const nextScratchTabs = s.scratchTabs.filter((tab) => tab.id !== id)
+
+      if (s.activeScratchId !== id) {
+        return { scratchTabs: nextScratchTabs }
+      }
+
+      const fallbackScratch = nextScratchTabs[nextScratchTabs.length - 1] ?? null
+      return {
+        scratchTabs: nextScratchTabs,
+        activeScratchId: fallbackScratch?.id ?? null,
+        scratchActive: Boolean(fallbackScratch),
+      }
+    }),
 }))

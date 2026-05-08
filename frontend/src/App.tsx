@@ -43,6 +43,24 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleRun, phase])
 
+  useEffect(() => {
+    const blockContextMenu = (event: MouseEvent) => {
+      event.preventDefault()
+    }
+
+    const blockDoubleClick = (event: MouseEvent) => {
+      event.preventDefault()
+    }
+
+    document.addEventListener('contextmenu', blockContextMenu)
+    document.addEventListener('dblclick', blockDoubleClick)
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu)
+      document.removeEventListener('dblclick', blockDoubleClick)
+    }
+  }, [])
+
   const startResize = useCallback((target: 'sidebar' | 'terminal') => {
     const workspace = workspaceRef.current
     if (!workspace) return

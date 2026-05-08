@@ -274,8 +274,15 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
 
 // ── Scratch Pad section ───────────────────────────────────────────────────────
 function ScratchSection() {
-  const { scratchActive, scratchCode, activateScratch, clearScratch } = useFileStore()
-  const lineCount = scratchCode.split('\n').length
+  const {
+    scratchActive,
+    activeScratchId,
+    scratchTabs,
+    activateScratch,
+    clearScratch,
+  } = useFileStore()
+  const activeScratch = scratchTabs.find((tab) => tab.id === activeScratchId) ?? null
+  const lineCount = (activeScratch?.content ?? '').split('\n').length
 
   return (
     <div className={`${styles.scratchSection} ${scratchActive ? styles.scratchSectionActive : ''}`}>
@@ -283,26 +290,26 @@ function ScratchSection() {
       {/* Header row */}
       <div
         className={`${styles.scratchHeader} ${scratchActive ? styles.scratchHeaderActive : ''}`}
-        onClick={activateScratch}
-        title="Open scratch pad — no file needed"
+        onClick={() => activateScratch()}
+        title="Create a new scratch tab"
       >
         <span className={styles.scratchIcon}>⚡</span>
         <div className={styles.scratchTitles}>
           <span className={styles.scratchTitle}>Scratch Pad</span>
-          <span className={styles.scratchSub}>no file needed</span>
+          <span className={styles.scratchSub}>new scratch tab</span>
         </div>
-        {scratchActive && <span className={styles.scratchBadge}>active</span>}
+        {scratchTabs.length > 0 && <span className={styles.scratchBadge}>{scratchTabs.length}</span>}
       </div>
 
       {/* Expanded info when active */}
-      {scratchActive && (
+      {scratchActive && activeScratch && (
         <div className={styles.scratchMeta}>
           <span className={styles.scratchMetaLine}>
-            {lineCount} line{lineCount !== 1 ? 's' : ''} · unsaved
+            {activeScratch.name} · {lineCount} line{lineCount !== 1 ? 's' : ''} · unsaved
           </span>
           <button
             className={styles.scratchClearBtn}
-            onClick={(e) => { e.stopPropagation(); clearScratch() }}
+            onClick={(e) => { e.stopPropagation(); clearScratch(activeScratch.id) }}
             title="Reset scratch to default template"
           >
             reset

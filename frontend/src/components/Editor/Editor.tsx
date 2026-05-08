@@ -15,17 +15,22 @@ export function Editor() {
     editorSettings,
   } = useEditorStore()
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const tabsRef = useRef<HTMLDivElement | null>(null)
 
   const scratchActive  = useFileStore((s) => s.scratchActive)
-  const scratchCode    = useFileStore((s) => s.scratchCode)
+  const activeScratchId = useFileStore((s) => s.activeScratchId)
+  const scratchTabs    = useFileStore((s) => s.scratchTabs)
   const setScratchCode = useFileStore((s) => s.setScratchCode)
+  const activateScratch = useFileStore((s) => s.activateScratch)
+  const closeScratchTab = useFileStore((s) => s.closeScratchTab)
   const activeFile     = useFileStore((s) => s.activeFile())
   const setFileContent = useFileStore((s) => s.setFileContent)
   const activeFileId   = useFileStore((s) => s.activeFileId)
+  const activeScratch  = scratchTabs.find((tab) => tab.id === activeScratchId) ?? null
 
   // Determine what to show in the editor
-  const code     = scratchActive ? scratchCode : (activeFile?.content ?? '')
-  const filename = scratchActive ? 'scratch.cpp' : (activeFile?.name ?? 'untitled')
+  const code     = scratchActive ? (activeScratch?.content ?? '') : (activeFile?.content ?? '')
+  const filename = scratchActive ? (activeScratch?.name ?? 'scratch.cpp') : (activeFile?.name ?? 'untitled')
 
   // Detect cin / getline usage whenever code changes
   useEffect(() => {
@@ -57,6 +62,20 @@ export function Editor() {
     })
   }, [editorSettings, monacoOptions])
 
+  useEffect(() => {
+    const tabsEl = tabsRef.current
+    if (!tabsEl) return
+
+    const handleWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+      event.preventDefault()
+      tabsEl.scrollLeft += event.deltaY
+    }
+
+    tabsEl.addEventListener('wheel', handleWheel, { passive: false })
+    return () => tabsEl.removeEventListener('wheel', handleWheel)
+  }, [scratchTabs.length])
+
   return (
     <div className={styles.wrapper}>
       {/* ── Code Editor ────────────────────────────────── */}
@@ -81,9 +100,35 @@ export function Editor() {
           <span className={styles.hint}>Ctrl+Enter to run</span>
         </div>
 
+        {scratchTabs.length > 0 && (
+          <div className={styles.tabsBar} ref={tabsRef}>
+            {scratchTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`${styles.editorTab} ${activeScratchId === tab.id ? styles.editorTabActive : ''}`}
+                onClick={() => activateScratch(tab.id)}
+                title={tab.name}
+              >
+                <span className={styles.editorTabName}>{tab.name}</span>
+                <span
+                  className={styles.editorTabClose}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    closeScratchTab(tab.id)
+                  }}
+                  aria-hidden="true"
+                >
+                  ×
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className={styles.cm}>
           <MonacoEditor
-            key={scratchActive ? 'scratch' : (activeFileId ?? 'empty')}
+            key={scratchActive ? (activeScratchId ?? 'scratch') : (activeFileId ?? 'empty')}
             value={code}
             height="100%"
             defaultLanguage="cpp"

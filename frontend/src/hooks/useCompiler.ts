@@ -17,12 +17,14 @@ export function useCompiler() {
   } = useEditorStore()
 
   const scratchActive = useFileStore((s) => s.scratchActive)
-  const scratchCode   = useFileStore((s) => s.scratchCode)
+  const activeScratchId = useFileStore((s) => s.activeScratchId)
+  const scratchTabs   = useFileStore((s) => s.scratchTabs)
   const activeFile    = useFileStore((s) => s.activeFile())
+  const activeScratch = scratchTabs.find((tab) => tab.id === activeScratchId) ?? null
 
   const compile = useCallback(async (): Promise<string | null> => {
     // Source: scratch buffer if scratch mode, otherwise the active file
-    const code = scratchActive ? scratchCode : (activeFile?.content ?? '')
+    const code = scratchActive ? (activeScratch?.content ?? '') : (activeFile?.content ?? '')
 
     if (!code.trim()) {
       appendOutput({ type: 'info', text: 'Nothing to compile.' })
@@ -34,7 +36,7 @@ export function useCompiler() {
     setSessionId(null)
     setActiveTab('console')
 
-    const sourceLabel = scratchActive ? '⚡ scratch.cpp' : (activeFile?.name ?? 'file')
+    const sourceLabel = scratchActive ? `⚡ ${activeScratch?.name ?? 'scratch.cpp'}` : (activeFile?.name ?? 'file')
     appendOutput({ type: 'info', text: `⟳  Compiling ${sourceLabel}…` })
 
     try {
@@ -89,7 +91,7 @@ export function useCompiler() {
       return null
     }
   }, [
-    scratchActive, scratchCode, activeFile,
+    scratchActive, activeScratch, activeFile,
     options, clearOutput, setPhase, setSessionId,
     setCompileOutput, appendOutput, setActiveTab,
   ])
