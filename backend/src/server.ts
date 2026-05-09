@@ -9,6 +9,7 @@ import { fileTemplatesRoute } from './routes/fileTemplates';
 import { projectBrowserRoute } from './routes/projectBrowser';
 import { recentProjectsRoute } from './routes/recentProjects';
 import { runSession } from './compiler';
+import { watchProjectRoots } from './projectBrowser';
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -43,7 +44,7 @@ server.on('upgrade', (request, socket, head) => {
   const baseUrl = `http://${request.headers.host}`;
   const pathname = new URL(request.url ?? '/', baseUrl).pathname;
 
-  if (pathname.startsWith('/ws/run/')) {
+  if (pathname.startsWith('/ws/run/') || pathname === '/ws/project-watch') {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
     });
@@ -55,7 +56,29 @@ server.on('upgrade', (request, socket, head) => {
 wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   const baseUrl = `http://${req.headers.host}`;
   const pathname = new URL(req.url ?? '/', baseUrl).pathname;
-  // e.g. /ws/run/550e8400-e29b-41d4-a716-446655440000
+
+  if (pathname === '/ws/project-watch') {
+    let disposeWatch: (() => void) | null = null;
+
+    ws.on('message', (raw) => {
+      try {
+        const message = JSON.parse(raw.toString()) as { type?: string; roots?: string[] };
+        if (message.type !== 'subscribe' || !Array.isArray(message.roots)) return;
+
+        if (disposeWatch) disposeWatch();
+        disposeWatch = watchProjectRoots(ws, message.roots);
+      } catch {
+        // ignore malformed messages
+      }
+    });
+
+    ws.on('close', () => {
+      if (disposeWatch) disposeWatch();
+    });
+
+    return;
+  }
+
   const sessionId = pathname.replace('/ws/run/', '');
 
   if (!sessionId) {

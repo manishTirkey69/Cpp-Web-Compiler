@@ -1,8 +1,6 @@
 import { create } from 'zustand'
 import type { FsNode, FsFile, FsFolder, SavedFileHandle, ScratchTab, UntitledFileTemplate } from '@/types'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 let _id = 0
 const uid = () => `node_${++_id}`
 let scratchCounter = 0
@@ -12,87 +10,52 @@ function createScratchName() {
   return `scratch_${scratchCounter}.cpp`
 }
 
-// ── Recursive tree helpers ────────────────────────────────────────────────────
-
 function findNode(nodes: FsNode[], id: string): FsNode | null {
-  for (const n of nodes) {
-    if (n.id === id) return n
-    if (n.kind === 'folder') {
-      const found = findNode(n.children, id)
+  for (const node of nodes) {
+    if (node.id === id) return node
+    if (node.kind === 'folder') {
+      const found = findNode(node.children, id)
       if (found) return found
     }
   }
   return null
 }
 
-function renameIn(nodes: FsNode[], id: string, name: string): FsNode[] {
-  return nodes.map((n) => {
-    if (n.id === id) return { ...n, name }
-    if (n.kind === 'folder') return { ...n, children: renameIn(n.children, id, name) }
-    return n
+function mapNodes(nodes: FsNode[], mapper: (node: FsNode) => FsNode): FsNode[] {
+  return nodes.map((node) => {
+    const nextNode =
+      node.kind === 'folder'
+        ? { ...node, children: mapNodes(node.children, mapper) }
+        : node
+    return mapper(nextNode)
   })
 }
 
 function deleteIn(nodes: FsNode[], id: string): FsNode[] {
   return nodes
-    .filter((n) => n.id !== id)
-    .map((n) =>
-      n.kind === 'folder' ? { ...n, children: deleteIn(n.children, id) } : n
+    .filter((node) => node.id !== id)
+    .map((node) =>
+      node.kind === 'folder' ? { ...node, children: deleteIn(node.children, id) } : node,
     )
-}
-
-function toggleIn(nodes: FsNode[], id: string): FsNode[] {
-  return nodes.map((n) => {
-    if (n.id === id && n.kind === 'folder') return { ...n, collapsed: !n.collapsed }
-    if (n.kind === 'folder') return { ...n, children: toggleIn(n.children, id) }
-    return n
-  })
-}
-
-function insertIn(nodes: FsNode[], parentId: string, child: FsNode): FsNode[] {
-  return nodes.map((n) => {
-    if (n.id === parentId && n.kind === 'folder')
-      return { ...n, collapsed: false, children: [...n.children, child] }
-    if (n.kind === 'folder') return { ...n, children: insertIn(n.children, parentId, child) }
-    return n
-  })
-}
-
-function updateContentIn(nodes: FsNode[], id: string, content: string): FsNode[] {
-  return nodes.map((n) => {
-    if (n.kind === 'file' && n.id === id) return { ...n, content }
-    if (n.kind === 'folder') return { ...n, children: updateContentIn(n.children, id, content) }
-    return n
-  })
-}
-
-function updateFileIn(nodes: FsNode[], id: string, updater: (file: FsFile) => FsFile): FsNode[] {
-  return nodes.map((n) => {
-    if (n.kind === 'file' && n.id === id) return updater(n)
-    if (n.kind === 'folder') return { ...n, children: updateFileIn(n.children, id, updater) }
-    return n
-  })
 }
 
 function allFileIds(nodes: FsNode[]): string[] {
   const ids: string[] = []
-  for (const n of nodes) {
-    if (n.kind === 'file') ids.push(n.id)
-    else ids.push(...allFileIds(n.children))
+  for (const node of nodes) {
+    if (node.kind === 'file') ids.push(node.id)
+    else ids.push(...allFileIds(node.children))
   }
   return ids
 }
 
 function nextUntitledFileName(nodes: FsNode[]): string {
   const names = new Set<string>()
-
   const collect = (items: FsNode[]) => {
     for (const item of items) {
       names.add(item.name)
       if (item.kind === 'folder') collect(item.children)
     }
   }
-
   collect(nodes)
 
   if (!names.has('untitled.cpp')) return 'untitled.cpp'
@@ -104,16 +67,11 @@ function nextUntitledFileName(nodes: FsNode[]): string {
 
 function buildTemplateContent(template: UntitledFileTemplate | null) {
   if (!template) {
-    return {
-      content: '',
-      lineNumber: 1,
-      column: 1,
-    }
+    return { content: '', lineNumber: 1, column: 1 }
   }
 
   const includeLines = template.headerfile.map((header) => `#include <${header}>`)
-  const bodyLines = [...template.body]
-  const contentLines = [...includeLines, ...bodyLines]
+  const contentLines = [...includeLines, ...template.body]
 
   let lineNumber = 1
   let column = 1
@@ -121,19 +79,10 @@ function buildTemplateContent(template: UntitledFileTemplate | null) {
   const normalizedContentLines = contentLines.map((line, index) => {
     const cursorIndex = line.indexOf('<CURSOR>')
     if (cursorIndex < 0) return line
-
     lineNumber = index + 1
     column = cursorIndex + 1
     return line.replace('<CURSOR>', '')
   })
-
-  if (normalizedContentLines.length === 0) {
-    return {
-      content: '',
-      lineNumber: 1,
-      column: 1,
-    }
-  }
 
   return {
     content: normalizedContentLines.join('\n'),
@@ -142,13 +91,54 @@ function buildTemplateContent(template: UntitledFileTemplate | null) {
   }
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+function insertIn(nodes: FsNode[], parentId: string, child: FsNode): FsNode[] {
+  return nodes.map((node) => {
+    if (node.kind === 'folder' && node.id === parentId) {
+      return {
+        ...node,
+        collapsed: false,
+        isLoaded: true,
+        children: [...node.children, child],
+      }
+    }
+
+    return node.kind === 'folder'
+      ? { ...node, children: insertIn(node.children, parentId, child) }
+      : node
+  })
+}
+
+function replaceFolderChildren(nodes: FsNode[], id: string, children: FsNode[]): FsNode[] {
+  return mapNodes(nodes, (node) => {
+    if (node.kind === 'folder' && node.id === id) {
+      return {
+        ...node,
+        children,
+        isLoaded: true,
+      }
+    }
+    return node
+  })
+}
+
+function updateFileIn(nodes: FsNode[], id: string, updater: (file: FsFile) => FsFile): FsNode[] {
+  return mapNodes(nodes, (node) => {
+    if (node.kind === 'file' && node.id === id) return updater(node)
+    return node
+  })
+}
+
+function updateFolderIn(nodes: FsNode[], id: string, updater: (folder: FsFolder) => FsFolder): FsNode[] {
+  return mapNodes(nodes, (node) => {
+    if (node.kind === 'folder' && node.id === id) return updater(node)
+    return node
+  })
+}
 
 interface FileStore {
-  // ── Project file tree ─────────────────────────────────
-  tree:         FsNode[]
+  tree: FsNode[]
   activeFileId: string | null
-  openFileIds:  string[]
+  openFileIds: string[]
   untitledTemplate: UntitledFileTemplate | null
   scratchpadTemplate: UntitledFileTemplate | null
   pendingCursorPlacement: {
@@ -158,27 +148,29 @@ interface FileStore {
     column: number
   } | null
 
-  openFile:      (id: string) => void
-  closeFileTab:  (id: string) => void
-  openFirstFile: () => void
-  newProject:    () => void
-  loadProject:   (tree: FsNode[]) => void
+  openFile: (id: string) => void
+  closeFileTab: (id: string) => void
+  newProject: () => void
+  loadProject: (tree: FsNode[]) => void
+  replaceProjectTree: (tree: FsNode[]) => void
+  replaceWorkspaceRoot: (root: FsFolder) => void
+  setFolderChildren: (id: string, children: FsNode[]) => void
+  setFolderLoaded: (id: string, isLoaded: boolean) => void
+  setFileLoadedContent: (id: string, content: string) => void
   setUntitledTemplate: (template: UntitledFileTemplate) => void
   setScratchpadTemplate: (template: UntitledFileTemplate) => void
   consumePendingCursorPlacement: () => void
-  activeFile:    () => FsFile | null
+  activeFile: () => FsFile | null
   getActiveFile: () => FsFile | null
-
-  createFile:   (parentId: string | null, name?: string) => void
+  createFile: (parentId: string | null, name?: string) => void
   createFolder: (parentId: string | null, name: string) => void
-  renameNode:   (id: string, name: string) => void
+  renameNode: (id: string, name: string) => void
   bindFileHandle: (id: string, name: string, savedHandle: SavedFileHandle | null) => void
-  deleteNode:   (id: string) => void
+  deleteNode: (id: string) => void
   toggleFolder: (id: string) => void
-  updateContent:  (id: string, content: string) => void
   setFileContent: (id: string, content: string) => void
+  removeUntitledFiles: (ids: string[]) => void
 
-  // ── Scratch pad ───────────────────────────────────────
   scratchActive: boolean
   activeScratchId: string | null
   scratchTabs: ScratchTab[]
@@ -189,44 +181,28 @@ interface FileStore {
 }
 
 export const useFileStore = create<FileStore>((set, get) => ({
-  // ── Project file tree ─────────────────────────────────
-  tree:         [],
+  tree: [],
   activeFileId: null,
-  openFileIds:  [],
+  openFileIds: [],
   untitledTemplate: null,
   scratchpadTemplate: null,
   pendingCursorPlacement: null,
 
   openFile: (id) =>
-    set((s) => ({
+    set((state) => ({
       activeFileId: id,
       scratchActive: false,
-      openFileIds: s.openFileIds.includes(id) ? s.openFileIds : [...s.openFileIds, id],
+      openFileIds: state.openFileIds.includes(id) ? state.openFileIds : [...state.openFileIds, id],
     })),
 
   closeFileTab: (id) =>
-    set((s) => {
-      const nextOpenFileIds = s.openFileIds.filter((fileId) => fileId !== id)
-      if (s.activeFileId !== id) return { openFileIds: nextOpenFileIds }
+    set((state) => {
+      const nextOpenFileIds = state.openFileIds.filter((fileId) => fileId !== id)
+      if (state.activeFileId !== id) return { openFileIds: nextOpenFileIds }
 
-      const fallbackId = nextOpenFileIds[nextOpenFileIds.length - 1] ?? null
       return {
         openFileIds: nextOpenFileIds,
-        activeFileId: fallbackId,
-      }
-    }),
-
-  openFirstFile: () =>
-    set((s) => {
-      const firstFileId = allFileIds(s.tree)[0] ?? null
-      if (!firstFileId) return s
-
-      return {
-        activeFileId: firstFileId,
-        scratchActive: false,
-        openFileIds: s.openFileIds.includes(firstFileId)
-          ? s.openFileIds
-          : [...s.openFileIds, firstFileId],
+        activeFileId: nextOpenFileIds[nextOpenFileIds.length - 1] ?? null,
       }
     }),
 
@@ -242,19 +218,67 @@ export const useFileStore = create<FileStore>((set, get) => ({
     })),
 
   loadProject: (tree) =>
-    set(() => {
-      const firstFileId = allFileIds(tree)[0] ?? null
+    set((state) => {
+      const roots = tree.filter((node): node is FsFolder => node.kind === 'folder')
+      const dedupedExisting = state.tree.filter(
+        (node) =>
+          node.kind !== 'folder' ||
+          !roots.some((root) => root.serverPath && root.serverPath === node.serverPath),
+      )
+
+      const nextTree = [...dedupedExisting, ...roots]
+      const firstFileId = allFileIds(nextTree)[0] ?? state.activeFileId
 
       return {
-        tree,
+        tree: nextTree,
+        activeFileId: firstFileId ?? null,
+        openFileIds: firstFileId
+          ? Array.from(new Set([...state.openFileIds, firstFileId]))
+          : state.openFileIds,
+        pendingCursorPlacement: null,
+        scratchActive: false,
+      }
+    }),
+
+  replaceProjectTree: (tree) =>
+    set(() => {
+      const nextTree = tree.filter((node): node is FsFolder => node.kind === 'folder')
+      const firstFileId = allFileIds(nextTree)[0] ?? null
+
+      return {
+        tree: nextTree,
         activeFileId: firstFileId,
         openFileIds: firstFileId ? [firstFileId] : [],
         pendingCursorPlacement: null,
         scratchActive: false,
-        activeScratchId: null,
-        scratchTabs: [],
       }
     }),
+
+  replaceWorkspaceRoot: (root) =>
+    set((state) => ({
+      tree: state.tree.map((node) =>
+        node.kind === 'folder' && node.serverPath === root.serverPath ? root : node,
+      ),
+    })),
+
+  setFolderChildren: (id, children) =>
+    set((state) => ({
+      tree: replaceFolderChildren(state.tree, id, children),
+    })),
+
+  setFolderLoaded: (id, isLoaded) =>
+    set((state) => ({
+      tree: updateFolderIn(state.tree, id, (folder) => ({ ...folder, isLoaded })),
+    })),
+
+  setFileLoadedContent: (id, content) =>
+    set((state) => ({
+      tree: updateFileIn(state.tree, id, (file) => ({
+        ...file,
+        content,
+        isLoaded: true,
+      })),
+    })),
 
   setUntitledTemplate: (untitledTemplate) => set({ untitledTemplate }),
   setScratchpadTemplate: (scratchpadTemplate) => set({ scratchpadTemplate }),
@@ -277,21 +301,21 @@ export const useFileStore = create<FileStore>((set, get) => ({
   createFile: (parentId, name) => {
     const templateResult = buildTemplateContent(get().untitledTemplate)
     const newFile: FsFile = {
-      kind:    'file',
-      id:      uid(),
-      name:    name?.trim()
+      kind: 'file',
+      id: uid(),
+      name: name?.trim()
         ? (name.includes('.') ? name : `${name}.cpp`)
         : nextUntitledFileName(get().tree),
       content: templateResult.content,
+      isLoaded: true,
       savedHandle: null,
       serverPath: null,
     }
-    set((s) => ({
-      tree: parentId === null
-        ? [...s.tree, newFile]
-        : insertIn(s.tree, parentId, newFile),
+
+    set((state) => ({
+      tree: parentId === null ? [...state.tree, newFile] : insertIn(state.tree, parentId, newFile),
       activeFileId: newFile.id,
-      openFileIds: s.openFileIds.includes(newFile.id) ? s.openFileIds : [...s.openFileIds, newFile.id],
+      openFileIds: state.openFileIds.includes(newFile.id) ? state.openFileIds : [...state.openFileIds, newFile.id],
       pendingCursorPlacement: {
         targetId: newFile.id,
         targetKind: 'file',
@@ -304,27 +328,29 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   createFolder: (parentId, name) => {
     const newFolder: FsFolder = {
-      kind:      'folder',
-      id:        uid(),
+      kind: 'folder',
+      id: uid(),
       name,
       collapsed: false,
+      isLoaded: true,
       savedHandle: null,
       serverPath: null,
-      children:  [],
+      children: [],
     }
-    set((s) => ({
-      tree: parentId === null
-        ? [...s.tree, newFolder]
-        : insertIn(s.tree, parentId, newFolder),
+
+    set((state) => ({
+      tree: parentId === null ? [...state.tree, newFolder] : insertIn(state.tree, parentId, newFolder),
     }))
   },
 
   renameNode: (id, name) =>
-    set((s) => ({ tree: renameIn(s.tree, id, name) })),
+    set((state) => ({
+      tree: mapNodes(state.tree, (node) => (node.id === id ? { ...node, name } : node)),
+    })),
 
   bindFileHandle: (id, name, savedHandle) =>
-    set((s) => ({
-      tree: updateFileIn(s.tree, id, (file) => ({
+    set((state) => ({
+      tree: updateFileIn(state.tree, id, (file) => ({
         ...file,
         name,
         savedHandle,
@@ -332,49 +358,70 @@ export const useFileStore = create<FileStore>((set, get) => ({
     })),
 
   deleteNode: (id) =>
-    set((s) => {
-      const newTree   = deleteIn(s.tree, id)
-      const remaining = allFileIds(newTree)
-      const nextOpenFileIds = s.openFileIds.filter((fileId) => remaining.includes(fileId))
+    set((state) => {
+      const nextTree = deleteIn(state.tree, id)
+      const remaining = allFileIds(nextTree)
+      const nextOpenFileIds = state.openFileIds.filter((fileId) => remaining.includes(fileId))
       const nextActive =
-        s.activeFileId === id || !remaining.includes(s.activeFileId ?? '')
-          ? (nextOpenFileIds[nextOpenFileIds.length - 1] ?? remaining[0] ?? null)
-          : s.activeFileId
-      return { tree: newTree, activeFileId: nextActive, openFileIds: nextOpenFileIds }
+        state.activeFileId === id || !remaining.includes(state.activeFileId ?? '')
+          ? (nextOpenFileIds[nextOpenFileIds.length - 1] ?? null)
+          : state.activeFileId
+
+      return {
+        tree: nextTree,
+        activeFileId: nextActive,
+        openFileIds: nextOpenFileIds,
+      }
     }),
 
   toggleFolder: (id) =>
-    set((s) => ({ tree: toggleIn(s.tree, id) })),
-
-  updateContent: (id, content) =>
-    set((s) => ({ tree: updateContentIn(s.tree, id, content) })),
+    set((state) => ({
+      tree: updateFolderIn(state.tree, id, (folder) => ({
+        ...folder,
+        collapsed: !folder.collapsed,
+      })),
+    })),
 
   setFileContent: (id, content) =>
-    set((s) => ({ tree: updateContentIn(s.tree, id, content) })),
+    set((state) => ({
+      tree: updateFileIn(state.tree, id, (file) => ({ ...file, content, isLoaded: true })),
+    })),
 
-  // ── Scratch pad ───────────────────────────────────────
+  removeUntitledFiles: (ids) =>
+    set((state) => {
+      const nextTree = ids.reduce((currentTree, id) => deleteIn(currentTree, id), state.tree)
+      const remaining = allFileIds(nextTree)
+      const nextOpenFileIds = state.openFileIds.filter((fileId) => remaining.includes(fileId))
+      return {
+        tree: nextTree,
+        openFileIds: nextOpenFileIds,
+        activeFileId: remaining.includes(state.activeFileId ?? '') ? state.activeFileId : (nextOpenFileIds[nextOpenFileIds.length - 1] ?? null),
+      }
+    }),
+
   scratchActive: false,
   activeScratchId: null,
   scratchTabs: [],
 
   activateScratch: (id) =>
-    set((s) => {
+    set((state) => {
       if (id) {
-        const target = s.scratchTabs.find((tab) => tab.id === id)
-        if (!target) return s
+        const target = state.scratchTabs.find((tab) => tab.id === id)
+        if (!target) return state
         return { scratchActive: true, activeScratchId: id }
       }
 
-      const templateResult = buildTemplateContent(s.scratchpadTemplate)
+      const templateResult = buildTemplateContent(state.scratchpadTemplate)
       const nextScratch: ScratchTab = {
         id: `scratch_${uid()}`,
         name: createScratchName(),
         content: templateResult.content,
       }
+
       return {
         scratchActive: true,
         activeScratchId: nextScratch.id,
-        scratchTabs: [...s.scratchTabs, nextScratch],
+        scratchTabs: [...state.scratchTabs, nextScratch],
         pendingCursorPlacement: {
           targetId: nextScratch.id,
           targetKind: 'scratch',
@@ -385,24 +432,22 @@ export const useFileStore = create<FileStore>((set, get) => ({
     }),
 
   setScratchCode: (content) =>
-    set((s) => ({
-      scratchTabs: s.scratchTabs.map((tab) =>
-        tab.id === s.activeScratchId ? { ...tab, content } : tab
+    set((state) => ({
+      scratchTabs: state.scratchTabs.map((tab) =>
+        tab.id === state.activeScratchId ? { ...tab, content } : tab,
       ),
     })),
 
   clearScratch: (id) =>
-    set((s) => {
-      const targetId = id ?? s.activeScratchId
-      if (!targetId) return s
+    set((state) => {
+      const targetId = id ?? state.activeScratchId
+      if (!targetId) return state
 
-      const templateResult = buildTemplateContent(s.scratchpadTemplate)
+      const templateResult = buildTemplateContent(state.scratchpadTemplate)
 
       return {
-        scratchTabs: s.scratchTabs.map((tab) =>
-          tab.id === targetId
-            ? { ...tab, content: templateResult.content }
-            : tab
+        scratchTabs: state.scratchTabs.map((tab) =>
+          tab.id === targetId ? { ...tab, content: templateResult.content } : tab,
         ),
         pendingCursorPlacement: {
           targetId,
@@ -414,10 +459,10 @@ export const useFileStore = create<FileStore>((set, get) => ({
     }),
 
   closeScratchTab: (id) =>
-    set((s) => {
-      const nextScratchTabs = s.scratchTabs.filter((tab) => tab.id !== id)
+    set((state) => {
+      const nextScratchTabs = state.scratchTabs.filter((tab) => tab.id !== id)
 
-      if (s.activeScratchId !== id) {
+      if (state.activeScratchId !== id) {
         return { scratchTabs: nextScratchTabs }
       }
 

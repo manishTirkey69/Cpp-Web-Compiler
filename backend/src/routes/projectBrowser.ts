@@ -1,6 +1,8 @@
 import { Request, Response, Router } from 'express';
 import {
   listProjectDirectories,
+  readProjectDirectory,
+  readProjectFile,
   readProjectTree,
   writeProjectFile,
 } from '../projectBrowser';
@@ -39,6 +41,50 @@ projectBrowserRoute.get('/project-tree', (req: Request, res: Response) => {
     res.status(400).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to read project tree.',
+    });
+  }
+});
+
+projectBrowserRoute.get('/project-directory', (req: Request, res: Response) => {
+  try {
+    if (typeof req.query.path !== 'string' || !req.query.path.trim()) {
+      res.status(400).json({
+        success: false,
+        error: 'path query parameter is required.',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      ...readProjectDirectory(req.query.path),
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to read directory.',
+    });
+  }
+});
+
+projectBrowserRoute.get('/project-file', (req: Request, res: Response) => {
+  try {
+    if (typeof req.query.path !== 'string' || !req.query.path.trim()) {
+      res.status(400).json({
+        success: false,
+        error: 'path query parameter is required.',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      ...readProjectFile(req.query.path),
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to read file.',
     });
   }
 });

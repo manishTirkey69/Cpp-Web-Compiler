@@ -156,6 +156,20 @@ export interface ProjectTreeApiResponse {
   error?: string
 }
 
+export interface ProjectDirectoryApiResponse {
+  success: boolean
+  path?: string
+  children?: FsNode[]
+  error?: string
+}
+
+export interface ProjectFileApiResponse {
+  success: boolean
+  path?: string
+  content?: string
+  error?: string
+}
+
 export interface ProjectFileWriteApiResponse {
   success: boolean
   error?: string
@@ -213,6 +227,7 @@ export interface FsFile {
   id: string
   name: string
   content: string
+  isLoaded: boolean
   savedHandle: SavedFileHandle | null
   serverPath: string | null
 }
@@ -228,9 +243,15 @@ export interface FsFolder {
   id: string
   name: string
   collapsed: boolean
+  isLoaded: boolean
   savedHandle: SavedDirectoryHandle | null
   serverPath: string | null
   children: FsNode[]
+}
+
+export interface ProjectWatchMessage {
+  type: 'refresh'
+  roots: string[]
 }
 
 export type FsNode = FsFile | FsFolder

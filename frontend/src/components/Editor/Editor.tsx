@@ -3,7 +3,9 @@ import type { editor } from 'monaco-editor'
 import { buildMonacoOptions } from '@/lib/editorSettings'
 import {
   browseHostedDirectories,
+  connectWorkspaceWatcher,
   pickProjectTree,
+  readHostedFile,
   saveHostedProjectFile,
 } from '@/lib/openProject'
 import { saveFileAs, saveToFileHandle } from '@/lib/saveFile'
@@ -22,6 +24,54 @@ import type {
 import styles from './Editor.module.css'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
+const PATH_SEPARATOR_PATTERN = /[\\/]/
+
+function ensureTrailingSlash(value: string) {
+  return value.endsWith('/') || value.endsWith('\\') ? value : `${value}/`
+}
+
+function parseProjectDialogInput(inputValue: string, currentPath: string | null, rootPath: string | null) {
+  const trimmedValue = inputValue.trim()
+  const fallbackBrowsePath = currentPath ?? rootPath ?? ''
+
+  if (!trimmedValue) {
+    return {
+      browsePath: fallbackBrowsePath,
+      filterQuery: '',
+      hasExplicitBrowsePath: false,
+    }
+  }
+
+  const endsWithSeparator = PATH_SEPARATOR_PATTERN.test(trimmedValue.slice(-1))
+  const lastForwardSlash = trimmedValue.lastIndexOf('/')
+  const lastBackSlash = trimmedValue.lastIndexOf('\\')
+  const lastSeparatorIndex = Math.max(lastForwardSlash, lastBackSlash)
+
+  if (endsWithSeparator) {
+    const browsePath = trimmedValue.slice(0, -1) || trimmedValue
+    return {
+      browsePath,
+      filterQuery: '',
+      hasExplicitBrowsePath: true,
+    }
+  }
+
+  if (lastSeparatorIndex >= 0) {
+    const browsePath = trimmedValue.slice(0, lastSeparatorIndex) || trimmedValue.slice(0, 1)
+    const filterQuery = trimmedValue.slice(lastSeparatorIndex + 1)
+    return {
+      browsePath,
+      filterQuery,
+      hasExplicitBrowsePath: true,
+    }
+  }
+
+  return {
+    browsePath: fallbackBrowsePath,
+    filterQuery: trimmedValue,
+    hasExplicitBrowsePath: false,
+  }
+}
 
 function recentProjectStamp(openedAt: string): string {
   const openedDate = new Date(openedAt)
@@ -57,10 +107,11 @@ export function Editor() {
   const [recentProjectsError, setRecentProjectsError] = useState<string | null>(null)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
   const [projectDialogPath, setProjectDialogPath] = useState<string | null>(null)
+  const [projectDialogInputValue, setProjectDialogInputValue] = useState('')
   const [projectDialogRootPath, setProjectDialogRootPath] = useState<string | null>(null)
-  const [projectDialogParentPath, setProjectDialogParentPath] = useState<string | null>(null)
   const [projectDialogDirectories, setProjectDialogDirectories] = useState<ProjectBrowserDirectory[]>([])
   const [projectDialogSelectedPath, setProjectDialogSelectedPath] = useState<string | null>(null)
+  const [projectDialogHighlightIndex, setProjectDialogHighlightIndex] = useState(0)
   const [projectDialogLoading, setProjectDialogLoading] = useState(false)
   const [projectDialogError, setProjectDialogError] = useState<string | null>(null)
 
@@ -74,10 +125,13 @@ export function Editor() {
   const openFile       = useFileStore((s) => s.openFile)
   const closeFileTab   = useFileStore((s) => s.closeFileTab)
   const loadProject    = useFileStore((s) => s.loadProject)
+  const replaceProjectTree = useFileStore((s) => s.replaceProjectTree)
+  const replaceWorkspaceRoot = useFileStore((s) => s.replaceWorkspaceRoot)
   const untitledTemplate = useFileStore((s) => s.untitledTemplate)
   const setUntitledTemplate = useFileStore((s) => s.setUntitledTemplate)
   const setScratchpadTemplate = useFileStore((s) => s.setScratchpadTemplate)
   const bindFileHandle = useFileStore((s) => s.bindFileHandle)
+  const setFileLoadedContent = useFileStore((s) => s.setFileLoadedContent)
   const pendingCursorPlacement = useFileStore((s) => s.pendingCursorPlacement)
   const consumePendingCursorPlacement = useFileStore((s) => s.consumePendingCursorPlacement)
   const activeFile     = useFileStore((s) => s.activeFile())
@@ -103,6 +157,21 @@ export function Editor() {
   const code     = scratchActive ? (activeScratch?.content ?? '') : (activeFile?.content ?? '')
   const filename = scratchActive ? (activeScratch?.name ?? 'scratch.cpp') : (activeFile?.name ?? 'untitled')
   const showEmptyProjectState = !scratchActive && !activeFile
+  const hostedRootPaths = tree
+    .filter((node): node is FsNode & { kind: 'folder'; serverPath: string } => node.kind === 'folder' && Boolean(node.serverPath))
+    .map((node) => node.serverPath)
+  const hostedRootPathsKey = hostedRootPaths.join('\n')
+  const parsedProjectDialogInput = parseProjectDialogInput(
+    projectDialogInputValue,
+    projectDialogPath,
+    projectDialogRootPath,
+  )
+  const filteredProjectDialogDirectories = projectDialogDirectories.filter((directory) => {
+    const query = parsedProjectDialogInput.filterQuery.toLowerCase()
+    if (!query) return true
+    return directory.name.toLowerCase().includes(query)
+  })
+  const highlightedProjectDirectory = filteredProjectDialogDirectories[projectDialogHighlightIndex] ?? null
 
   // Detect cin / getline usage whenever code changes
   useEffect(() => {
@@ -185,18 +254,23 @@ export function Editor() {
     }
   }, [activeFile, bindFileHandle, scratchActive])
 
-  const loadProjectDialogDirectory = useCallback(async (path?: string | null) => {
+  const loadProjectDialogDirectory = useCallback(async (
+    path?: string | null,
+    options?: { preserveInputValue?: string | null },
+  ) => {
     setProjectDialogLoading(true)
     setProjectDialogError(null)
+    setProjectDialogDirectories([])
+    setProjectDialogSelectedPath(null)
+    setProjectDialogHighlightIndex(0)
 
     try {
       const data = await browseHostedDirectories(path ?? undefined)
       setProjectDialogOpen(true)
       setProjectDialogRootPath(data.rootPath)
       setProjectDialogPath(data.currentPath)
-      setProjectDialogParentPath(data.parentPath)
+      setProjectDialogInputValue(options?.preserveInputValue ?? ensureTrailingSlash(data.currentPath))
       setProjectDialogDirectories(data.directories)
-      setProjectDialogSelectedPath(null)
     } catch (error) {
       setProjectDialogError(error instanceof Error ? error.message : 'Failed to browse directories.')
       setProjectDialogOpen(true)
@@ -252,13 +326,51 @@ export function Editor() {
       if (!canContinue) return
 
       const projectSelection = await pickProjectTree(project.path)
-      loadProject(projectSelection.tree)
+      replaceProjectTree(projectSelection.tree)
       setRecentProjectsOpen(false)
       await syncRecentProject(projectSelection.projectName, projectSelection.projectPath)
     } catch (error) {
       setRecentProjectsError(error instanceof Error ? error.message : 'Failed to open recent project.')
     }
-  }, [loadProject, prepareUntitledFilesForProjectSwitch, syncRecentProject])
+  }, [prepareUntitledFilesForProjectSwitch, replaceProjectTree, syncRecentProject])
+
+  useEffect(() => {
+    if (!projectDialogOpen || !parsedProjectDialogInput.hasExplicitBrowsePath) return
+    if (!parsedProjectDialogInput.browsePath || parsedProjectDialogInput.browsePath === projectDialogPath) return
+
+    const timeoutId = window.setTimeout(() => {
+      void loadProjectDialogDirectory(parsedProjectDialogInput.browsePath, {
+        preserveInputValue: projectDialogInputValue,
+      })
+    }, 120)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    loadProjectDialogDirectory,
+    parsedProjectDialogInput.browsePath,
+    parsedProjectDialogInput.hasExplicitBrowsePath,
+    projectDialogOpen,
+    projectDialogInputValue,
+    projectDialogPath,
+  ])
+
+  useEffect(() => {
+    if (filteredProjectDialogDirectories.length === 0) {
+      if (projectDialogHighlightIndex !== 0) setProjectDialogHighlightIndex(0)
+      if (projectDialogSelectedPath) setProjectDialogSelectedPath(null)
+      return
+    }
+
+    if (projectDialogHighlightIndex >= filteredProjectDialogDirectories.length) {
+      setProjectDialogHighlightIndex(filteredProjectDialogDirectories.length - 1)
+      return
+    }
+
+    const highlighted = filteredProjectDialogDirectories[projectDialogHighlightIndex]
+    if (highlighted && highlighted.path !== projectDialogSelectedPath) {
+      setProjectDialogSelectedPath(highlighted.path)
+    }
+  }, [filteredProjectDialogDirectories, projectDialogHighlightIndex, projectDialogSelectedPath])
 
   useEffect(() => {
     const currentEditor = editorRef.current
@@ -286,6 +398,52 @@ export function Editor() {
     tabsEl.addEventListener('wheel', handleWheel, { passive: false })
     return () => tabsEl.removeEventListener('wheel', handleWheel)
   }, [scratchTabs.length, fileTabs.length])
+
+  useEffect(() => {
+    if (!activeFile || activeFile.isLoaded || !activeFile.serverPath) return
+
+    let cancelled = false
+
+    const loadFile = async () => {
+      try {
+        const data = await readHostedFile(activeFile.serverPath!)
+        if (!cancelled) {
+          setFileLoadedContent(activeFile.id, data.content)
+        }
+      } catch {
+        // Ignore file load failures for now.
+      }
+    }
+
+    void loadFile()
+    return () => { cancelled = true }
+  }, [activeFile, setFileLoadedContent])
+
+  useEffect(() => {
+    if (!hostedRootPathsKey) return
+
+    const watcherRoots = hostedRootPathsKey
+      .split('\n')
+      .filter(Boolean)
+
+    const disconnect = connectWorkspaceWatcher(watcherRoots, () => {
+      void Promise.all(
+        watcherRoots.map(async (rootPath) => {
+          try {
+            const projectSelection = await pickProjectTree(rootPath)
+            const nextRoot = projectSelection.tree[0]
+            if (nextRoot && nextRoot.kind === 'folder') {
+              replaceWorkspaceRoot(nextRoot)
+            }
+          } catch {
+            // Ignore refresh failures.
+          }
+        }),
+      )
+    })
+
+    return disconnect
+  }, [hostedRootPathsKey, replaceWorkspaceRoot])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -616,25 +774,64 @@ export function Editor() {
             </div>
 
             <div className={styles.projectBrowserBar}>
-              <button
-                type="button"
-                className={styles.projectBrowserNavBtn}
-                onClick={() => { void loadProjectDialogDirectory(projectDialogParentPath) }}
-                disabled={!projectDialogParentPath || projectDialogLoading}
-              >
-                Up
-              </button>
-              <button
-                type="button"
-                className={styles.projectBrowserNavBtn}
-                onClick={() => { void loadProjectDialogDirectory(projectDialogRootPath) }}
-                disabled={!projectDialogRootPath || projectDialogLoading}
-              >
-                Root
-              </button>
-              <div className={styles.projectBrowserPath} title={projectDialogPath ?? ''}>
-                {projectDialogPath ?? 'Select a hosted directory'}
-              </div>
+              <input
+                type="text"
+                className={styles.projectBrowserPathInput}
+                value={projectDialogInputValue}
+                placeholder={projectDialogRootPath ?? 'Select a hosted directory'}
+                onChange={(event) => {
+                  setProjectDialogInputValue(event.target.value)
+                  setProjectDialogSelectedPath(null)
+                  setProjectDialogHighlightIndex(0)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    if (filteredProjectDialogDirectories.length === 0) return
+                    event.preventDefault()
+                    setProjectDialogHighlightIndex((index) =>
+                      index >= filteredProjectDialogDirectories.length - 1 ? 0 : index + 1,
+                    )
+                    return
+                  }
+
+                  if (event.key === 'ArrowUp') {
+                    if (filteredProjectDialogDirectories.length === 0) return
+                    event.preventDefault()
+                    setProjectDialogHighlightIndex((index) =>
+                      index <= 0 ? filteredProjectDialogDirectories.length - 1 : index - 1,
+                    )
+                    return
+                  }
+
+                  if (event.key === 'Tab') {
+                    if (!highlightedProjectDirectory) return
+                    event.preventDefault()
+                    setProjectDialogInputValue(highlightedProjectDirectory.path)
+                    setProjectDialogSelectedPath(highlightedProjectDirectory.path)
+                    setProjectDialogHighlightIndex(
+                      filteredProjectDialogDirectories.findIndex(
+                        (directory) => directory.path === highlightedProjectDirectory.path,
+                      ),
+                    )
+                    return
+                  }
+
+                  if (event.key !== 'Enter') return
+                  event.preventDefault()
+
+                  if (highlightedProjectDirectory) {
+                    setProjectDialogSelectedPath(highlightedProjectDirectory.path)
+                    void loadProjectDialogDirectory(highlightedProjectDirectory.path)
+                    return
+                  }
+
+                  const nextPath = projectDialogInputValue.trim()
+                  if (!nextPath || projectDialogLoading) return
+                  void loadProjectDialogDirectory(nextPath)
+                }}
+                spellCheck={false}
+                autoFocus
+              />
             </div>
 
             <div className={styles.projectBrowserBody}>
@@ -646,21 +843,30 @@ export function Editor() {
                 <div className={styles.recentStateError}>{projectDialogError}</div>
               )}
 
-              {!projectDialogLoading && !projectDialogError && projectDialogDirectories.length === 0 && (
-                <div className={styles.recentState}>No subfolders here. You can open the current folder.</div>
+              {!projectDialogLoading && !projectDialogError && filteredProjectDialogDirectories.length === 0 && (
+                <div className={styles.recentState}>
+                  {projectDialogDirectories.length === 0
+                    ? 'No subfolders here. You can open the current folder.'
+                    : 'No folders match the current filter.'}
+                </div>
               )}
 
-              {!projectDialogLoading && !projectDialogError && projectDialogDirectories.length > 0 && (
+              {!projectDialogLoading && !projectDialogError && filteredProjectDialogDirectories.length > 0 && (
                 <div className={styles.projectBrowserList}>
-                  {projectDialogDirectories.map((directory) => (
+                  {filteredProjectDialogDirectories.map((directory) => (
                     <button
                       key={directory.path}
                       type="button"
                       className={`${styles.projectBrowserItem} ${projectDialogSelectedPath === directory.path ? styles.projectBrowserItemActive : ''}`}
-                      onClick={() => setProjectDialogSelectedPath(directory.path)}
+                      onClick={() => {
+                        const nextIndex = filteredProjectDialogDirectories.findIndex(
+                          (entry) => entry.path === directory.path,
+                        )
+                        setProjectDialogSelectedPath(directory.path)
+                        setProjectDialogHighlightIndex(nextIndex >= 0 ? nextIndex : 0)
+                      }}
                       onDoubleClick={() => { void loadProjectDialogDirectory(directory.path) }}
                     >
-                      <span className={styles.projectBrowserItemIcon} aria-hidden="true" />
                       <span className={styles.projectBrowserItemName}>{directory.name}</span>
                     </button>
                   ))}
@@ -680,11 +886,12 @@ export function Editor() {
                 type="button"
                 className={`${styles.emptyActionBtn} ${styles.emptyActionPrimary}`}
                 onClick={() => {
-                  const targetPath = projectDialogSelectedPath ?? projectDialogPath
+                  const typedPath = projectDialogInputValue.trim()
+                  const targetPath = (projectDialogSelectedPath ?? typedPath) || (projectDialogPath ?? '')
                   if (!targetPath) return
                   void handleSelectHostedProject(targetPath)
                 }}
-                disabled={projectDialogLoading || !projectDialogPath}
+                disabled={projectDialogLoading || !(projectDialogSelectedPath || projectDialogInputValue.trim() || projectDialogPath)}
               >
                 Open Selected Folder
               </button>

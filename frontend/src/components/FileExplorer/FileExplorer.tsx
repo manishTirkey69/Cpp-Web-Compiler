@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { readHostedDirectory } from '@/lib/openProject'
 import { useFileStore } from '@/store/useFileStore'
 import { saveFileAs } from '@/lib/saveFile'
 import type { FsFile, FsFolder, FsNode } from '@/types'
@@ -176,6 +177,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
     renameNode,
     bindFileHandle,
     deleteNode,
+    setFolderChildren,
     toggleFolder,
     createFile,
     createFolder,
@@ -215,9 +217,22 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
     })
   }, [bindFileHandle, node])
 
-  const handleClick = () => {
-    if (node.kind === 'file')   openFile(node.id)
-    if (node.kind === 'folder') toggleFolder(node.id)
+  const handleClick = async () => {
+    if (node.kind === 'file') {
+      openFile(node.id)
+      return
+    }
+
+    if (node.serverPath && !node.isLoaded) {
+      try {
+        const data = await readHostedDirectory(node.serverPath)
+        setFolderChildren(node.id, data.children)
+      } catch {
+        // Ignore browse failures here; the folder can be retried.
+      }
+    }
+
+    toggleFolder(node.id)
   }
 
   const commitRename = (newName: string) => {
@@ -235,7 +250,7 @@ function TreeNode({ node, depth, pendingNew, onNewCreated, onCancelNew }: TreeNo
       <li
         className={`${styles.row} ${isActive ? styles.active : ''}`}
         style={indent}
-        onClick={handleClick}
+        onClick={() => { void handleClick() }}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleCtx}
         title={node.name}
@@ -362,14 +377,15 @@ function ScratchSection() {
 // ── Root FileExplorer ─────────────────────────────────────────────────────────
 export function FileExplorer() {
   const { tree, createFile, createFolder } = useFileStore()
-  const projectRoot =
-    tree.length === 1 && tree[0]?.kind === 'folder'
-      ? tree[0] as FsFolder
-      : null
-  const hasOpenedProject = Boolean(projectRoot)
-  const headerTitle = projectRoot?.name ?? 'Project'
-  const visibleTree = projectRoot?.children ?? tree
-  const rootParentId = projectRoot?.id ?? null
+  const hostedRoots = tree.filter((node): node is FsFolder => node.kind === 'folder' && Boolean(node.serverPath))
+  const singleHostedRoot = hostedRoots.length === 1 && tree.length === 1 ? hostedRoots[0] : null
+  const hasOpenedProject = hostedRoots.length > 0
+  const headerTitle =
+    hostedRoots.length > 1
+      ? 'Workspace'
+      : singleHostedRoot?.name ?? 'Project'
+  const visibleTree = singleHostedRoot ? singleHostedRoot.children : tree
+  const rootParentId = singleHostedRoot?.id ?? null
   const [pendingNew, setPendingNew]   = useState<{
     parentId: string | null
     kind: 'folder'
