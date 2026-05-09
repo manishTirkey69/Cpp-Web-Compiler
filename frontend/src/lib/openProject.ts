@@ -10,6 +10,19 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+function getWorkspaceWatcherUrl() {
+  if (API_BASE) {
+    return `${API_BASE.replace(/^http/, 'ws')}/ws/project-watch`
+  }
+
+  if (import.meta.env.DEV) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.hostname}:3001/ws/project-watch`
+  }
+
+  return `${window.location.origin.replace(/^http/, 'ws')}/ws/project-watch`
+}
+
 export async function browseHostedDirectories(path?: string) {
   const searchParams = new URLSearchParams()
   if (path) searchParams.set('path', path)
@@ -96,8 +109,7 @@ export function connectWorkspaceWatcher(
 ) {
   if (roots.length === 0) return () => undefined
 
-  const wsUrlBase = (API_BASE || window.location.origin).replace(/^http/, 'ws')
-  const socket = new WebSocket(`${wsUrlBase}/ws/project-watch`)
+  const socket = new WebSocket(getWorkspaceWatcherUrl())
   let isDisposed = false
 
   socket.addEventListener('open', () => {

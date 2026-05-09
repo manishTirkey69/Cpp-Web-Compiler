@@ -360,6 +360,11 @@
   border-color: rgba(124, 106, 247, 0.22);
 }
 
+.recentItem:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
 .recentItemIcon {
   width: 38px;
   height: 38px;

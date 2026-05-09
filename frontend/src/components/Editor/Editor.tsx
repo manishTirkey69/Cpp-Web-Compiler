@@ -91,6 +91,17 @@ function recentProjectStamp(openedAt: string): string {
   return `${months} months ago`
 }
 
+function mergeRecentProjects(
+  projects: RecentProject[],
+  nextProject: RecentProject,
+): RecentProject[] {
+  const deduped = projects.filter(
+    (project) => project.path.toLowerCase() !== nextProject.path.toLowerCase(),
+  )
+
+  return [nextProject, ...deduped]
+}
+
 export function Editor() {
   const {
     stdin,
@@ -105,6 +116,7 @@ export function Editor() {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [recentProjectsLoading, setRecentProjectsLoading] = useState(false)
   const [recentProjectsError, setRecentProjectsError] = useState<string | null>(null)
+  const [openingRecentProjectPath, setOpeningRecentProjectPath] = useState<string | null>(null)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
   const [projectDialogPath, setProjectDialogPath] = useState<string | null>(null)
   const [projectDialogInputValue, setProjectDialogInputValue] = useState('')
@@ -216,16 +228,31 @@ export function Editor() {
   }, [])
 
   const syncRecentProject = useCallback(async (projectName: string, projectPath: string) => {
+    const optimisticProject: RecentProject = {
+      projectName,
+      path: projectPath,
+      openedAt: new Date().toISOString(),
+    }
+
+    setRecentProjects((currentProjects) => mergeRecentProjects(currentProjects, optimisticProject))
+
     try {
-      await fetch(`${API_BASE}/api/recent-projects`, {
+      const res = await fetch(`${API_BASE}/api/recent-projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           path: projectPath,
           projectName,
-          openedAt: new Date().toISOString(),
+          openedAt: optimisticProject.openedAt,
         }),
       })
+
+      if (!res.ok) return
+
+      const data = await res.json() as RecentProjectsApiResponse
+      if (Array.isArray(data.projects)) {
+        setRecentProjects(data.projects)
+      }
     } catch {
       // Ignore recent-project sync failures.
     }
@@ -319,7 +346,10 @@ export function Editor() {
   }, [loadProjectDialogDirectory, projectDialogPath])
 
   const handleOpenRecentProject = useCallback(async (project: RecentProject) => {
+    if (openingRecentProjectPath) return
+
     setRecentProjectsError(null)
+    setOpeningRecentProjectPath(project.path)
 
     try {
       const canContinue = await prepareUntitledFilesForProjectSwitch()
@@ -331,8 +361,10 @@ export function Editor() {
       await syncRecentProject(projectSelection.projectName, projectSelection.projectPath)
     } catch (error) {
       setRecentProjectsError(error instanceof Error ? error.message : 'Failed to open recent project.')
+    } finally {
+      setOpeningRecentProjectPath(null)
     }
-  }, [prepareUntitledFilesForProjectSwitch, replaceProjectTree, syncRecentProject])
+  }, [openingRecentProjectPath, prepareUntitledFilesForProjectSwitch, replaceProjectTree, syncRecentProject])
 
   useEffect(() => {
     if (!projectDialogOpen || !parsedProjectDialogInput.hasExplicitBrowsePath) return
@@ -518,13 +550,21 @@ export function Editor() {
     if (!recentProjectsOpen) return
 
     let cancelled = false
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      controller.abort()
+    }, 4000)
 
     const loadRecentProjects = async () => {
-      setRecentProjectsLoading(true)
+      if (recentProjects.length === 0) {
+        setRecentProjectsLoading(true)
+      }
       setRecentProjectsError(null)
 
       try {
-        const res = await fetch(`${API_BASE}/api/recent-projects`)
+        const res = await fetch(`${API_BASE}/api/recent-projects`, {
+          signal: controller.signal,
+        })
         if (!res.ok) throw new Error(`Failed to load recent projects (${res.status})`)
 
         const data = await res.json() as RecentProjectsApiResponse
@@ -532,7 +572,7 @@ export function Editor() {
           setRecentProjects(data.projects ?? [])
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
           setRecentProjectsError(error instanceof Error ? error.message : 'Failed to load recent projects.')
         }
       } finally {
@@ -542,8 +582,12 @@ export function Editor() {
 
     loadRecentProjects()
 
-    return () => { cancelled = true }
-  }, [recentProjectsOpen])
+    return () => {
+      cancelled = true
+      controller.abort()
+      window.clearTimeout(timeoutId)
+    }
+  }, [recentProjects.length, recentProjectsOpen])
 
   return (
     <div className={styles.wrapper}>
@@ -706,6 +750,7 @@ export function Editor() {
                     type="button"
                     className={styles.recentItem}
                     onClick={() => { void handleOpenRecentProject(project) }}
+                    disabled={Boolean(openingRecentProjectPath)}
                   >
                     <div className={styles.recentItemIcon}>📁</div>
                     <div className={styles.recentItemBody}>
@@ -715,7 +760,9 @@ export function Editor() {
                       </div>
                       <div className={styles.recentProjectPath}>{project.path}</div>
                       <div className={styles.recentProjectDate}>
-                        {new Date(project.openedAt).toLocaleString()}
+                        {openingRecentProjectPath === project.path
+                          ? 'Opening project…'
+                          : new Date(project.openedAt).toLocaleString()}
                       </div>
                     </div>
                   </button>
