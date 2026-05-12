@@ -1,4 +1,4 @@
-# C++ Shell — Online Compiler
+# C++ Online Web Compiler
 
 A **cpp.sh-inspired** online C++ compiler with a modern React + TypeScript frontend,
 a Node.js/TypeScript backend, and **live streaming output** via WebSocket.
